@@ -270,10 +270,17 @@ QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def){
 		return UINT32_MAX;
 	}
 	else if(def->type >= QC_TYPE_COUNT){
-		qcLogError("unrecognized type code 0x%ux", def->type);
+		qcLogError("unrecognized type code 0x%ux in def '%s'", def->type, builder->bc.strBuf.data() + def->nameIdx);
 		return UINT32_MAX;
 	}
-	else if(def->globalIdx)
+	else if(def->globalIdx >= builder->bc.globals.size()){
+		qcLogError("invalid global index %u in def '%s'", def->globalIdx, builder->bc.strBuf.data() + def->nameIdx);
+		return UINT32_MAX;
+	}
+
+	const auto idx = builder->bc.defs.size();
+	builder->bc.defs.emplace_back(*def);
+	return idx;
 }
 
 }
