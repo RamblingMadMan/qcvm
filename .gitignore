@@ -1,0 +1,16 @@
+# build related files/dirs
+build
+cmake-build-*
+*.o
+*.a
+*.so
+*.lib
+*.dll
+*.exe
+
+# IDE/Desktop related files
+.idea
+.vs
+.kdev4
+*.kate-swp
+*.kdev4
