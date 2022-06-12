@@ -54,10 +54,10 @@ struct QC_VM_Fn_Builtin{
 	QC_Uint32 index;
 };
 
-typedef struct QC_VM_Var{
+typedef struct QC_VM_Value{
 	QC_Uint32 type;
 	QC_Value value;
-} QC_VM_Var;
+} QC_VM_Value;
 
 QC_VM *qcCreateVM();
 bool qcDestroyVM(QC_VM *vm);
@@ -67,13 +67,17 @@ bool qcVMGetBuiltin(const QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native *ret);
 
 const QC_VM_Fn *qcVMFindFn(const QC_VM *vm, const char *name, size_t nameLen);
 
-QC_VM_Var qcVMGetGlobal(const QC_VM *vm, const char *name, size_t nameLen);
+bool qcVMGetGlobal(const QC_VM *vm, const char *name, size_t nameLen, QC_VM_Value *ret);
+bool qcVMSetGlobal(QC_VM *vm, const char *name, size_t nameLen, QC_VM_Value value);
 
-void qcVMSetGlobal(QC_VM *vm, const char *name, size_t nameLen, QC_VM_Var value);
+typedef enum QC_VM_LoadFlags{
+	QC_VM_LOAD_OVERRIDE_FNS = 0x1u,
+	QC_VM_LOAD_OVERRIDE_GLOBALS = 0x1u << 1u,
+} QC_VM_LoadFlags;
 
-bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, bool overrideFns);
+bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags);
 
-bool qcVMExec(const QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC_Value *ret);
+bool qcVMExec(QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC_Value *ret);
 
 #ifdef __cplusplus
 }

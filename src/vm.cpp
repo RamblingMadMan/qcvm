@@ -8,6 +8,8 @@
 #include "parallel_hashmap/phmap.h"
 #include "parallel_hashmap/btree.h"
 
+#include "plf_colony.h"
+
 template<
 	class Key, class Value,
 	class Hash  = phmap::priv::hash_default_hash<Key>,
@@ -75,14 +77,32 @@ union QC_VM_FnStorage{
 	QC_VM_Fn_Builtin builtin;
 };
 
+struct QC_VM_Entity{
+	FlatHashMap<
+	    std::string, QC_Value,
+		phmap::priv::hash_default_hash<std::string_view>,
+		phmap::priv::hash_default_eq<std::string_view>
+	> fields;
+};
+
 struct QC_VM{
 	std::vector<const QC_ByteCode*> loadedBc;
+
 	FlatMap<QC_Uint32, QC_VM_Fn_Builtin> builtins;
+
+	FlatHashMap<
+		std::string, QC_VM_Value,
+		phmap::priv::hash_default_hash<std::string_view>,
+		phmap::priv::hash_default_eq<std::string_view>
+	> globals;
+
 	NodeHashMap<
 		std::string, QC_VM_FnStorage,
 		phmap::priv::hash_default_hash<std::string_view>,
 		phmap::priv::hash_default_eq<std::string_view>
 	> fns;
+
+	plf::colony<QC_VM_Entity> ents;
 };
 
 QC_VM *qcCreateVM(){
@@ -188,7 +208,7 @@ const QC_VM_Fn *qcVMFindFn(const QC_VM *vm, const char *name, size_t nameLen){
 	return &res->second.base;
 }
 
-bool qcVMExecNative_unsafe(const QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs, QC_Value *args, QC_Value *ret){
+bool qcVMExecNative_unsafe(QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs, QC_Value *args, QC_Value *ret){
 	void *argPtrs[8] = { nullptr };
 
 	for(QC_Uint32 i = 0; i < nargs; i++){
@@ -210,7 +230,7 @@ bool qcVMExecNative_unsafe(const QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32
 	return true;
 }
 
-bool qcVMExec(const QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC_Value *ret){
+bool qcVMExec(QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC_Value *ret){
 	if(!vm){
 		qcLogError("NULL vm passed to qcVMExec");
 		return false;
@@ -248,7 +268,7 @@ bool qcVMExec(const QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *ar
 	}
 }
 
-bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, bool overrideFns){
+bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
 	if(!vm || !bc){
 		qcLogError("NULL argument passed");
 		return false;
@@ -259,6 +279,12 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, bool overrideFns){
 
 	const auto fns = qcByteCodeFunctions(bc);
 	const auto nFns = qcByteCodeNumFunctions(bc);
+
+	const auto defs = qcByteCodeDefs(bc);
+	const auto nDefs = qcByteCodeNumDefs(bc);
+
+	const auto globals = qcByteCodeGlobals(bc);
+	const auto nGlobals = qcByteCodeNumGlobals(bc);
 
 	for(QC_Uint32 i = 0; i < nFns; i++){
 		const auto fn = fns + i;
@@ -298,14 +324,14 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, bool overrideFns){
 			}
 
 			const auto emplaceRes = vm->fns.try_emplace(fnName);
-			if(emplaceRes.second || overrideFns){
+			if(emplaceRes.second || (loadFlags & QC_VM_LOAD_OVERRIDE_FNS)){
 				const auto vmFn = &emplaceRes.first->second;
 				vmFn->builtin = *builtinFn;
 			}
 		}
 		else{
 			const auto emplaceRes = vm->fns.try_emplace(fnName);
-			if(emplaceRes.second || overrideFns){
+			if(emplaceRes.second || (loadFlags & QC_VM_LOAD_OVERRIDE_FNS)){
 				const auto vmFn = &emplaceRes.first->second;
 				vmFn->bytecode = QC_VM_Fn_Bytecode{
 					.QCVM_SUPER_MEMBER = QC_VM_Fn{ .type = QC_VM_FN_BYTECODE },
@@ -313,6 +339,26 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, bool overrideFns){
 					.fn = fn
 				};
 			}
+		}
+	}
+
+	for(QC_Uint32 i = 0; i < nDefs; i++){
+		const auto def = defs + i;
+		const bool isGlobal = def->type & (1u << 15u);
+		const auto defType = def->type & ~(1u << 15u);
+
+		if(!isGlobal){
+			continue;
+		}
+
+		const auto defName = std::string_view(strBuf + def->nameIdx);
+
+		const auto globalVal = globals + def->globalIdx;
+
+		const auto emplaceRes = vm->globals.try_emplace(defName);
+		if(emplaceRes.second || (loadFlags & QC_VM_LOAD_OVERRIDE_GLOBALS)){
+			const auto vmGlobal = &emplaceRes.first->second;
+			*vmGlobal = QC_VM_Value{ .type = defType, .value = *globalVal };
 		}
 	}
 

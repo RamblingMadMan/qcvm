@@ -397,8 +397,8 @@ QC_Uint32 qcTypeSize(QC_Type type){
 		case QC_TYPE_STRING: return sizeof(QC_Uint32); // string buffer offset
 		case QC_TYPE_FLOAT: return sizeof(QC_Float);
 		case QC_TYPE_VECTOR: return sizeof(QC_Float) * 3;
-		case QC_TYPE_ENTITY: return sizeof(QC_Uint32);
-		case QC_TYPE_FIELD: return sizeof(QC_Uint32);
+		case QC_TYPE_ENTITY: return sizeof(QC_Uint64); // TODO: check if this is compatible
+		case QC_TYPE_FIELD: return sizeof(QC_Uint64);
 		case QC_TYPE_FUNC: return sizeof(QC_Uint32);
 
 		case QC_TYPE_INT32: return sizeof(QC_Int32);

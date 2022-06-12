@@ -21,12 +21,21 @@ option(QCVM_BUILD_TEST "Build the test executable" ${PROJECT_IS_TOP_LEVEL})
 ###
 
 FetchContent_Declare(
-	parallel_hashmap
+	parallel_hashmap_content
 	GIT_REPOSITORY https://github.com/greg7mdp/parallel-hashmap.git
 	GIT_TAG 655dee936b5b65ec0468517dd6728a7ada2b2e02 # latest at time of writing
 )
 
-FetchContent_MakeAvailable(parallel_hashmap)
+FetchContent_Declare(
+	plf_colony_content
+	GIT_REPOSITORY https://github.com/mattreecebentley/plf_colony.git
+	GIT_TAG 7243b4601b5d7e989550c158a9918ea5a05feaf4 # latest at time of writing
+)
+
+FetchContent_MakeAvailable(parallel_hashmap_content plf_colony_content)
+
+add_library(plf_colony INTERFACE)
+target_include_directories(plf_colony INTERFACE ${plf_colony_content_SOURCE_DIR})
 
 ###
 # Project targets
