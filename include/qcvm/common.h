@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+#define QCVM_SUPER_MEMBER _super
+#define QCVM_DERIVED(base) base QCVM_SUPER_MEMBER;
+#define QCVM_SUPER(ptr) (&(ptr)->QCVM_SUPER_MEMBER)
+#define QCVM_SUPER2(ptr) (&(ptr)->QCVM_SUPER_MEMBER.QCVM_SUPER_MEMBER)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -25,10 +30,23 @@ enum {
 	QC_TRUE = 1, QC_FALSE = 0
 };
 
+typedef QC_Uint32 QC_Enum;
 typedef QC_Uint32 QC_Bool;
 
 typedef float QC_Float;
 typedef double QC_Double;
+
+typedef union QC_Value{
+	QC_Uint16 u16;
+	QC_Int16 i16;
+	QC_Uint32 u32;
+	QC_Int32 i32;
+	QC_Uint64 u64;
+	QC_Int64 i64;
+	QC_Float f32;
+	QC_Double f64;
+	QC_Float v32[3];
+} QC_Value;
 
 #ifdef __GNUC__
 #define QCVM_PRINTF_LIKE(fmtStrArg, vaArg) __attribute__ ((format (printf, (fmtStrArg), (vaArg))))

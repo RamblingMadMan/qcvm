@@ -13,11 +13,11 @@ struct QC_ByteCode{
 	std::vector<QC_Def> defs;
 	std::vector<QC_Field> fields;
 	std::vector<QC_Function> fns;
-	std::vector<QC_Uint32> globals;
+	std::vector<QC_Value> globals;
 	std::vector<char> strBuf;
 };
 
-QC_ByteCode *qcLoadByteCode(const char *bytes, size_t len){
+QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
 	if(len < sizeof(QC_Header)){
 		qcLogError("invalid bytecode: size smaller than sizeof(QC_Header)");
 		return nullptr;
@@ -77,7 +77,7 @@ QC_ByteCode *qcLoadByteCode(const char *bytes, size_t len){
 	std::vector<QC_Def> defs;
 	std::vector<QC_Field> fields;
 	std::vector<QC_Function> fns;
-	std::vector<QC_Uint32> globals;
+	std::vector<QC_Value> globals;
 	std::vector<char> strBuf;
 
 	stmts.reserve(numStmts);
@@ -85,8 +85,11 @@ QC_ByteCode *qcLoadByteCode(const char *bytes, size_t len){
 	fields.reserve(numFields);
 	fns.reserve(numFns);
 
-	globals.resize(numGlbs);
-	std::memcpy(globals.data(), glbsData.data(), glbsData.size() * sizeof(QC_Uint32)); // globals done
+	for(QC_Uint32 i = 0; i < numGlbs; i++){
+		QC_Value val;
+		std::memcpy(&val.u32, glbsData.data() + (i * sizeof(QC_Uint32)), sizeof(QC_Uint32));
+		globals.emplace_back(val);
+	}
 
 	strBuf.resize(strsData.size());
 	std::memcpy(strBuf.data(), strsData.data(), strsData.size()); // strBuf done
@@ -177,7 +180,7 @@ QC_ByteCode *qcLoadByteCode(const char *bytes, size_t len){
 	return p;
 }
 
-bool qcFreeByteCode(QC_ByteCode *bc){
+bool qcDestroyByteCode(QC_ByteCode *bc){
 	if(!bc) return false;
 	std::destroy_at(bc);
 	std::free(bc);
@@ -200,7 +203,7 @@ QC_Uint32 qcByteCodeNumFunctions(const QC_ByteCode *bc){ return bc->fns.size(); 
 const QC_Function *qcByteCodeFunctions(const QC_ByteCode *bc){ return bc->fns.data(); }
 
 QC_Uint32 qcByteCodeNumGlobals(const QC_ByteCode *bc){ return bc->globals.size(); }
-const QC_Uint32 *qcByteCodeGlobals(const QC_ByteCode *bc){ return bc->globals.data(); }
+const QC_Value *qcByteCodeGlobals(const QC_ByteCode *bc){ return bc->globals.data(); }
 
 struct QC_ByteCodeBuilder{
 	std::mutex mut;
@@ -270,17 +273,158 @@ QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def){
 		return UINT32_MAX;
 	}
 	else if(def->type >= QC_TYPE_COUNT){
-		qcLogError("unrecognized type code 0x%ux in def '%s'", def->type, builder->bc.strBuf.data() + def->nameIdx);
+		qcLogError("unrecognized type code 0x%ux for def '%s'", def->type, builder->bc.strBuf.data() + def->nameIdx);
 		return UINT32_MAX;
 	}
 	else if(def->globalIdx >= builder->bc.globals.size()){
-		qcLogError("invalid global index %u in def '%s'", def->globalIdx, builder->bc.strBuf.data() + def->nameIdx);
+		qcLogError("invalid global index %u for def '%s'", def->globalIdx, builder->bc.strBuf.data() + def->nameIdx);
 		return UINT32_MAX;
 	}
 
 	const auto idx = builder->bc.defs.size();
 	builder->bc.defs.emplace_back(*def);
 	return idx;
+}
+
+QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field *field){
+	if(!builder || !field){
+		qcLogError("NULL argument passed");
+		return UINT32_MAX;
+	}
+
+	std::scoped_lock lock(builder->mut);
+
+	if(field->nameIdx >= builder->bc.strBuf.size()){
+		qcLogError("invalid name string index %u", field->nameIdx);
+		return UINT32_MAX;
+	}
+	else if(field->type >= QC_TYPE_COUNT){
+		qcLogError("unrecognized type code 0x%ux for field '%s'", field->type, builder->bc.strBuf.data() + field->nameIdx);
+		return UINT32_MAX;
+	}
+
+	const auto idx = builder->bc.fields.size();
+	builder->bc.fields.emplace_back(*field);
+	return idx;
+}
+
+QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *fn){
+	if(!builder || !fn){
+		qcLogError("NULL argument passed");
+		return UINT32_MAX;
+	}
+
+	std::scoped_lock lock(builder->mut);
+
+	// Errors
+	if(fn->nameIdx >= builder->bc.strBuf.size()){
+		qcLogError("invalid name string index %u", fn->nameIdx);
+		return UINT32_MAX;
+	}
+	else if(fn->entryPoint >= builder->bc.stmts.size()){
+		qcLogError(
+			"invalid entry point 0x%ux for function '%s'",
+			fn->entryPoint, builder->bc.strBuf.data() + fn->nameIdx
+		);
+		return UINT32_MAX;
+	}
+	else if(fn->numArgs > 8){
+		qcLogError(
+			"invalid number of arguments %u (max 8) for function '%s'",
+			fn->numArgs, builder->bc.strBuf.data() + fn->nameIdx
+		);
+		return UINT32_MAX;
+	}
+
+	// Warnings
+	if(fn->fileIdx >= builder->bc.strBuf.size()){
+		qcLogWarn(
+			"invalid file name string index %u for function '%s'",
+			fn->fileIdx, builder->bc.strBuf.data() + fn->nameIdx
+		);
+	}
+
+	if(fn->profile != 0){
+		qcLogWarn(
+			"invalid profile value 0x%ux (should be 0x0) for function '%s",
+			(QC_Uint32)fn->profile, builder->bc.strBuf.data() + fn->nameIdx
+		);
+	}
+
+	const auto idx = builder->bc.fns.size();
+	builder->bc.fns.emplace_back(*fn);
+	return idx;
+}
+
+QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value){
+	if(!builder){
+		qcLogError("NULL argument passed");
+		return UINT32_MAX;
+	}
+
+	std::scoped_lock lock(builder->mut);
+	const auto idx = builder->bc.globals.size();
+	builder->bc.globals.emplace_back(value);
+	return idx;
+}
+
+QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len){
+	if(!builder){
+		qcLogError("NULL argument passed");
+		return UINT32_MAX;
+	}
+	else if(!str || !len){
+		qcLogError("invalid string argument");
+		return UINT32_MAX;
+	}
+	else if(str[len - 1] != '\0'){
+		qcLogError("passed string is not null-terminated");
+		return UINT32_MAX;
+	}
+
+	std::scoped_lock lock(builder->mut);
+	const auto idx = builder->bc.strBuf.size();
+	builder->bc.strBuf.insert(builder->bc.strBuf.end(), str, str + len);
+	return idx;
+}
+
+QC_Uint32 qcTypeSize(QC_Type type){
+#define QCVM_UNIMPLEMENTED_SIZE(case_) \
+    case case_: qcLogError("unimplemented type " #case_); return UINT32_MAX
+
+	switch(type){
+		case QC_TYPE_VOID: return 0;
+		case QC_TYPE_STRING: return sizeof(QC_Uint32); // string buffer offset
+		case QC_TYPE_FLOAT: return sizeof(QC_Float);
+		case QC_TYPE_VECTOR: return sizeof(QC_Float) * 3;
+		case QC_TYPE_ENTITY: return sizeof(QC_Uint32);
+		case QC_TYPE_FIELD: return sizeof(QC_Uint32);
+		case QC_TYPE_FUNC: return sizeof(QC_Uint32);
+
+		case QC_TYPE_INT32: return sizeof(QC_Int32);
+		case QC_TYPE_UINT32: return sizeof(QC_Uint32);
+		case QC_TYPE_INT64: return sizeof(QC_Int64);
+		case QC_TYPE_UINT64: return sizeof(QC_Uint64);
+		case QC_TYPE_DOUBLE: return sizeof(QC_Double);
+
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_VARIANT);
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_STRUCT);
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_UNION);
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_ACCESSOR);
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_ENUM);
+		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_BOOL);
+//		case QC_TYPE_VARIANT: return sizeof(QC_Uint64);
+//		case QC_TYPE_STRUCT: return sizeof(QC_Uint64);
+//		case QC_TYPE_UNION: return sizeof(QC_Uint64);
+//		case QC_TYPE_ACCESSOR: return sizeof(QC_Uint64);
+//		case QC_TYPE_ENUM: return sizeof(QC_Enum);
+//		case QC_TYPE_BOOL: return sizeof(QC_Bool);
+
+		default:{
+			qcLogError("invalid type code 0x%ux", type);
+			return UINT32_MAX;
+		}
+	}
 }
 
 }

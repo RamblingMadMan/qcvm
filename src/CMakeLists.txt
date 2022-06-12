@@ -10,4 +10,6 @@ add_library(
 
 target_include_directories(qcvm PUBLIC ${QCVM_INCLUDE_DIR})
 
+target_link_libraries(qcvm PRIVATE phmap)
+
 target_compile_features(qcvm PUBLIC cxx_std_20)

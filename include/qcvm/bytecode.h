@@ -64,17 +64,17 @@ typedef struct QC_Function QC_Function;
  * @param bytes Pointer to the bytecode
  * @param len Size in bytes \p bytes points to
  * @returns Loaded bytecode or `NULL` on error
- * @see qcFreeByteCode
+ * @see qcDestroyByteCode
  */
-QC_ByteCode *qcLoadByteCode(const char *bytes, size_t len);
+QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len);
 
 /**
  * @brief Free previously loaded bytecode
  * @param bc Bytecode to free
  * @returns Whether the bytecode was successfully freed
- * @see qcLoadByteCode
+ * @see qcCreateByteCode
  */
-bool qcFreeByteCode(QC_ByteCode *bc);
+bool qcDestroyByteCode(QC_ByteCode *bc);
 
 QC_Uint32 qcByteCodeStringsSize(const QC_ByteCode *bc);
 const char *qcByteCodeStrings(const QC_ByteCode *bc);
@@ -92,7 +92,7 @@ QC_Uint32 qcByteCodeNumFunctions(const QC_ByteCode *bc);
 const QC_Function *qcByteCodeFunctions(const QC_ByteCode *bc);
 
 QC_Uint32 qcByteCodeNumGlobals(const QC_ByteCode *bc);
-const QC_Uint32 *qcByteCodeGlobals(const QC_ByteCode *bc);
+const QC_Value *qcByteCodeGlobals(const QC_ByteCode *bc);
 
 /**
  * @brief Create a new bytecode builder
@@ -112,7 +112,7 @@ bool qcDestroyBuilder(QC_ByteCodeBuilder *builder);
 
 /**
  * @brief Emit the current state of the builder as bytecode
- * @note The return value should be freed with \ref qcFreeByteCode
+ * @note The return value should be freed with \ref qcDestroyByteCode
  * @param builder Builder to emit from
  * @returns Newly created bytecode or `NULL` on error
  */
@@ -153,10 +153,10 @@ QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *f
 /**
  * @brief Add a global definition index to a bytecode builder
  * @param builder Builder to add the global index to
- * @param defIdx Definition index to add to \p builder
- * @returns The index of the newly created global index or `UINT32_MAX` on error
+ * @param value Global value to add to \p builder
+ * @returns The index of the newly created global or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Uint32 defIdx);
+QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
 
 /**
  * @brief Add a string to a bytecode builder
@@ -174,7 +174,7 @@ enum QC_Type{
 	// Vanilla types
 	QC_TYPE_VOID = 0x0,
 	QC_TYPE_STRING	= 0x1,
-	QC_TYPE_FLOAT_	= 0x2,
+	QC_TYPE_FLOAT	= 0x2,
 	QC_TYPE_VECTOR	= 0x3,
 	QC_TYPE_ENTITY	= 0x4,
 	QC_TYPE_FIELD	= 0x5,
@@ -197,6 +197,13 @@ enum QC_Type{
 
 	QC_TYPE_COUNT
 };
+
+/**
+ * @brief Get the size of a type
+ * @param type Type code
+ * @returns Size of type referred to by \p type
+ */
+QC_Uint32 qcTypeSize(QC_Type type);
 
 /**
  * @brief Bytecode sections
