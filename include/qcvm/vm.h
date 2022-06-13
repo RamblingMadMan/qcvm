@@ -7,6 +7,7 @@
  */
 
 #include "bytecode.h"
+#include "builtins.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +24,7 @@ typedef struct QC_VM QC_VM;
 typedef struct QC_VM_Fn QC_VM_Fn;
 struct QC_VM_Fn{
 	QC_VM_FnType type;
+	QC_String nameIdx;
 };
 
 typedef struct QC_VM_Fn_Native QC_VM_Fn_Native;
@@ -31,13 +33,13 @@ struct QC_VM_Fn_Native{
 	QC_Type retType;
 	QC_Uint32 nParams;
 	QC_Type paramTypes[8];
-	QC_Value(*ptr)(void **args);
+	QC_Value(*ptr)(QC_VM *vm, void **args);
 };
 
 bool qcMakeNativeFn(
 	QC_Type retType,
 	QC_Uint32 nParams, const QC_Type *paramTypes,
-	QC_Value(*ptr)(void**),
+	QC_Value(*ptr)(QC_VM *vm, void**),
 	QC_VM_Fn_Native *ret
 );
 
@@ -59,11 +61,18 @@ typedef struct QC_VM_Value{
 	QC_Value value;
 } QC_VM_Value;
 
-QC_VM *qcCreateVM();
+QC_VM *qcCreateVMA(const QC_Allocator *allocator);
+
+static inline QC_VM *qcCreateVM(){
+	return qcCreateVMA(QC_DEFAULT_ALLOC);
+}
+
 bool qcDestroyVM(QC_VM *vm);
 
 bool qcVMSetBuiltin(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrideExisting);
 bool qcVMGetBuiltin(const QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native *ret);
+
+const QC_DefaultBuiltins *qcVMDefaultBuiltins(const QC_VM *vm);
 
 const QC_VM_Fn *qcVMFindFn(const QC_VM *vm, const char *name, size_t nameLen);
 

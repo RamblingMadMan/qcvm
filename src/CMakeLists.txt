@@ -6,10 +6,10 @@ add_library(
 	common.cpp
 	bytecode.cpp
 	vm.cpp
-)
+	string.cpp builtins.cpp)
 
 target_include_directories(qcvm PUBLIC ${QCVM_INCLUDE_DIR})
 
-target_link_libraries(qcvm PRIVATE phmap plf_colony)
+target_link_libraries(qcvm PRIVATE phmap plf_colony fmt-header-only)
 
 target_compile_features(qcvm PUBLIC cxx_std_20)

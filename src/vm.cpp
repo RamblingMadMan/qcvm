@@ -1,14 +1,16 @@
-#include "qcvm/common.h"
 #include "qcvm/vm.h"
-
-#include <cstdlib>
-#include <vector>
+#include "qcvm/string.h"
 
 #include "parallel_hashmap/phmap_fwd_decl.h"
 #include "parallel_hashmap/phmap.h"
 #include "parallel_hashmap/btree.h"
 
 #include "plf_colony.h"
+
+#include "fmt/format.h"
+
+#include <vector>
+#include <charconv>
 
 template<
 	class Key, class Value,
@@ -38,7 +40,7 @@ extern "C" {
 bool qcMakeNativeFn(
 	QC_Type retType,
 	QC_Uint32 nParams, const QC_Type *paramTypes,
-	QC_Value(*ptr)(void**),
+	QC_Value(*ptr)(QC_VM *vm, void**),
 	QC_VM_Fn_Native *ret
 ){
 	if(!ret){
@@ -86,6 +88,10 @@ struct QC_VM_Entity{
 };
 
 struct QC_VM{
+	const QC_Allocator *allocator;
+	QC_DefaultBuiltins vmBuiltins;
+	QC_StringBuffer *strBuf;
+
 	std::vector<const QC_ByteCode*> loadedBc;
 
 	FlatMap<QC_Uint32, QC_VM_Fn_Builtin> builtins;
@@ -105,8 +111,8 @@ struct QC_VM{
 	plf::colony<QC_VM_Entity> ents;
 };
 
-QC_VM *qcCreateVM(){
-	const auto mem = std::aligned_alloc(alignof(QC_VM), sizeof(QC_VM));
+QC_VM *qcCreateVMA(const QC_Allocator *allocator){
+	const auto mem = qcAllocA(allocator, sizeof(QC_VM), alignof(QC_VM));
 	if(!mem){
 		qcLogError("failed to allocate memory for QC_VM");
 		return nullptr;
@@ -114,13 +120,98 @@ QC_VM *qcCreateVM(){
 
 	const auto p = new(mem) QC_VM;
 
+	p->allocator = allocator;
+	p->strBuf = qcCreateStringBufferA(allocator);
+
+	p->vmBuiltins = QC_DefaultBuiltins{
+		.normalize = [](QC_VM*, QC_Vector v) -> QC_Vector{
+			const auto vec = qcVec4(v.x, v.y, v.z, 0.f);
+			const auto norm = qcVec4Normalize(vec);
+			return QC_Vector{ QC_VEC4_X(norm), QC_VEC4_Y(norm), QC_VEC4_Z(norm) };
+		},
+		.vlen = [](QC_VM*, QC_Vector v) -> QC_Float{
+			const auto vec = qcVec4(v.x, v.y, v.z, 0.f);
+			return qcVec4Length(vec);
+		},
+		.ftos = [](QC_VM *vm, QC_Float v) -> QC_String{
+			const auto str = std::to_string(v);
+			return qcStringBufferEmplace(vm->strBuf, str.c_str(), str.size());
+		},
+		.vtos = [](QC_VM *vm, QC_Vector v) -> QC_String{
+			const auto builtins = qcVMDefaultBuiltins(vm);
+			const QC_String strs[] = {
+				builtins->ftos(vm, v.x),
+				builtins->ftos(vm, v.y),
+				builtins->ftos(vm, v.z)
+			};
+
+			struct Data{
+				QC_VM *vm;
+				QC_String ret;
+			};
+
+			Data user = { .vm = vm, .ret = 0 };
+
+			qcStringView(
+				vm->strBuf,
+				3, strs,
+				[](void *user, const char *const *strs, const size_t *lens){
+					const auto data = reinterpret_cast<Data*>(user);
+					const auto ret = fmt::format(
+						"{} {} {}",
+						std::string_view(strs[0], lens[0]),
+						std::string_view(strs[1], lens[1]),
+						std::string_view(strs[2], lens[2])
+					);
+
+					data->ret = qcStringBufferEmplace(data->vm->strBuf, ret.c_str(), ret.size());
+				},
+				&user
+			);
+
+			return user.ret;
+		},
+		.rint = [](QC_VM*, QC_Float v) -> QC_Float{ return std::round(v); },
+		.floor = [](QC_VM*, QC_Float v) -> QC_Float{ return std::floor(v); },
+		.ceil = [](QC_VM*, QC_Float v) -> QC_Float{ return std::ceil(v); },
+		.fabs = [](QC_VM*, QC_Float v) -> QC_Float{ return std::abs(v); },
+		.stof = [](QC_VM *vm, QC_String s) -> QC_Float{
+			QC_Float ret = 0;
+
+			qcStringView(
+				vm->strBuf,
+				1, &s,
+				[](void *user, const char *const *strs, const size_t *lens){
+					const auto ret = reinterpret_cast<QC_Float*>(user);
+					const auto convRes = std::from_chars(strs[0], strs[0] + lens[0], *ret);
+					if(convRes.ec == std::errc::invalid_argument){
+						*ret = std::numeric_limits<QC_Float>::quiet_NaN();
+					}
+				},
+				&ret
+			);
+
+			return ret;
+		}
+	};
+
 	return p;
 }
 
 bool qcDestroyVM(QC_VM *vm){
 	if(!vm) return false;
+
+	qcDestroyStringBuffer(vm->strBuf);
+
+	const auto allocator = vm->allocator;
+
 	std::destroy_at(vm);
-	std::free(vm);
+
+	if(!qcFreeA(allocator, vm)){
+		qcLogError("failed to free memory at 0x%p, WARNING! OBJECT DESTROYED!", vm);
+		return false;
+	}
+
 	return true;
 }
 
@@ -189,9 +280,19 @@ bool qcVMGetBuiltin(const QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native *ret){
 	return true;
 }
 
+const QC_DefaultBuiltins *qcVMDefaultBuiltins(const QC_VM *vm){
+#ifndef NDEBUG
+	if(!vm){
+		qcLogError("NULL vm argument passed");
+		return nullptr;
+	}
+#endif
+	return &vm->vmBuiltins;
+}
+
 const QC_VM_Fn *qcVMFindFn(const QC_VM *vm, const char *name, size_t nameLen){
 	if(!vm){
-		qcLogError("NULL argument passed");
+		qcLogError("NULL vm argument passed");
 		return nullptr;
 	}
 	else if(!name || !nameLen){
@@ -215,9 +316,8 @@ bool qcVMExecNative_unsafe(QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs
 		const auto argType = fn->paramTypes[i];
 		const auto argSize = qcTypeSize(argType);
 		switch(argSize){
-			case 4: argPtrs[i] = &args[i].u32; break;
-			case 8: argPtrs[i] = &args[i].u64; break;
-			case 12: argPtrs[i] = &args[i].v32; break;
+			case 1: argPtrs[i] = &args[i].u64; break;
+			case 3: argPtrs[i] = &args[i].v32; break;
 
 			default:{
 				qcLogError("internal error: invalid type size for parameter %u", i);
@@ -226,7 +326,7 @@ bool qcVMExecNative_unsafe(QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs
 		}
 	}
 
-	*ret = fn->ptr(argPtrs);
+	*ret = fn->ptr(vm, argPtrs);
 	return true;
 }
 
@@ -266,6 +366,12 @@ bool qcVMExec(QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC
 			return false;
 		}
 	}
+}
+
+inline QC_String qcvmByteCodeStringEmplace(QC_StringBuffer *buf, const QC_ByteCode *bc, QC_String index){
+	const auto strs = qcByteCodeStrings(bc);
+	const auto str = std::string_view(strs + index);
+	return qcStringBufferEmplace(buf, str.data(), str.size());
 }
 
 bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
@@ -327,6 +433,7 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
 			if(emplaceRes.second || (loadFlags & QC_VM_LOAD_OVERRIDE_FNS)){
 				const auto vmFn = &emplaceRes.first->second;
 				vmFn->builtin = *builtinFn;
+				vmFn->base.nameIdx = qcvmByteCodeStringEmplace(vm->strBuf, bc, fn->nameIdx);
 			}
 		}
 		else{
@@ -334,7 +441,10 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
 			if(emplaceRes.second || (loadFlags & QC_VM_LOAD_OVERRIDE_FNS)){
 				const auto vmFn = &emplaceRes.first->second;
 				vmFn->bytecode = QC_VM_Fn_Bytecode{
-					.QCVM_SUPER_MEMBER = QC_VM_Fn{ .type = QC_VM_FN_BYTECODE },
+					.QCVM_SUPER_MEMBER = QC_VM_Fn{
+						.type = QC_VM_FN_BYTECODE,
+						.nameIdx = qcvmByteCodeStringEmplace(vm->strBuf, bc, fn->nameIdx)
+					},
 					.bc = bc,
 					.fn = fn
 				};
@@ -345,12 +455,12 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
 	for(QC_Uint32 i = 0; i < nDefs; i++){
 		const auto def = defs + i;
 		const bool isGlobal = def->type & (1u << 15u);
-		const auto defType = def->type & ~(1u << 15u);
 
 		if(!isGlobal){
 			continue;
 		}
 
+		const auto defType = def->type & ~(1u << 15u);
 		const auto defName = std::string_view(strBuf + def->nameIdx);
 
 		const auto globalVal = globals + def->globalIdx;

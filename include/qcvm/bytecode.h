@@ -8,7 +8,6 @@
 
 #include "common.h"
 
-#include <stddef.h>
 #include <assert.h>
 
 #ifdef __cplusplus
@@ -168,44 +167,6 @@ QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
 QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len);
 
 /**
- * @brief Bytecode data types
- */
-enum QC_Type{
-	// Vanilla types
-	QC_TYPE_VOID = 0x0,
-	QC_TYPE_STRING	= 0x1,
-	QC_TYPE_FLOAT	= 0x2,
-	QC_TYPE_VECTOR	= 0x3,
-	QC_TYPE_ENTITY	= 0x4,
-	QC_TYPE_FIELD	= 0x5,
-	QC_TYPE_FUNC	= 0x6,
-
-	// extended types
-	QC_TYPE_INT32	= 0x7,
-	QC_TYPE_UINT32	= 0x8,
-	QC_TYPE_INT64	= 0x9,
-	QC_TYPE_UINT64	= 0xA,
-	QC_TYPE_DOUBLE	= 0xB,
-
-	// qc-only types (qc?)
-	QC_TYPE_VARIANT		= 0xC,
-	QC_TYPE_STRUCT		= 0xD,
-	QC_TYPE_UNION		= 0xE,
-	QC_TYPE_ACCESSOR	= 0xF,	// some weird type to provide class-like functions over a basic type.
-	QC_TYPE_ENUM		= 0x10,
-	QC_TYPE_BOOL		= 0x11,
-
-	QC_TYPE_COUNT
-};
-
-/**
- * @brief Get the size of a type
- * @param type Type code
- * @returns Size of type referred to by \p type
- */
-QC_Uint32 qcTypeSize(QC_Type type);
-
-/**
  * @brief Bytecode sections
  */
 enum QC_Section{
@@ -237,11 +198,15 @@ struct QC_Statement32{
 	QC_Uint32 a, b, c;
 };
 
+static_assert(sizeof(QC_Statement32) == 16, "misaligned QC_Statement32");
+
 struct QC_Def16{
 	QC_Uint16 type;
 	QC_Uint16 globalIdx;
 	QC_Uint32 nameIdx;
 };
+
+static_assert(sizeof(QC_Def16) == 8, "misaligned QC_Def16");
 
 struct QC_Def32{
 	QC_Uint32 type;

@@ -36,7 +36,7 @@ static void QCVM_PRINTF_LIKE(3, 0) qcvm_defaultLogHandler(void*, QC_LogLevel lev
 		}
 	}
 
-	fprintf(outFile, "[%s] %s", label, msgBuf);
+	fprintf(outFile, "[%s] %s\n", label, msgBuf);
 }
 
 namespace {
@@ -46,6 +46,14 @@ namespace {
 }
 
 extern "C" {
+
+static const QC_Allocator qcvm_defaultAllocator = {
+	.alloc = [](void*, size_t size, size_t alignment){ return std::aligned_alloc(alignment, size); },
+	.free = [](void*, void *mem){ std::free(mem); return (bool)mem; },
+	.user = nullptr
+};
+
+const QC_Allocator *const QC_DEFAULT_ALLOC = &qcvm_defaultAllocator;
 
 QC_LogHandler qcGetLogHandler(void **userRet){
 	std::scoped_lock lock(qcvm_logMut);

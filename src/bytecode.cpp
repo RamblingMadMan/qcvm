@@ -390,22 +390,27 @@ QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_
 
 QC_Uint32 qcTypeSize(QC_Type type){
 #define QCVM_UNIMPLEMENTED_SIZE(case_) \
-    case case_: qcLogError("unimplemented type " #case_); return UINT32_MAX
+    case case_: qcLogError("unimplemented type code 0x%ux (" #case_ ")", case_); return UINT32_MAX
 
 	switch(type){
 		case QC_TYPE_VOID: return 0;
-		case QC_TYPE_STRING: return sizeof(QC_Uint32); // string buffer offset
-		case QC_TYPE_FLOAT: return sizeof(QC_Float);
-		case QC_TYPE_VECTOR: return sizeof(QC_Float) * 3;
-		case QC_TYPE_ENTITY: return sizeof(QC_Uint64); // TODO: check if this is compatible
-		case QC_TYPE_FIELD: return sizeof(QC_Uint64);
-		case QC_TYPE_FUNC: return sizeof(QC_Uint32);
+		case QC_TYPE_STRING: return 1;
+		case QC_TYPE_FLOAT: return 1;
+		case QC_TYPE_VECTOR: return 3;
+		case QC_TYPE_ENTITY: return 1;
+		case QC_TYPE_FIELD: return 1;
+		case QC_TYPE_FUNC: return 1;
 
-		case QC_TYPE_INT32: return sizeof(QC_Int32);
-		case QC_TYPE_UINT32: return sizeof(QC_Uint32);
-		case QC_TYPE_INT64: return sizeof(QC_Int64);
-		case QC_TYPE_UINT64: return sizeof(QC_Uint64);
-		case QC_TYPE_DOUBLE: return sizeof(QC_Double);
+		case QC_TYPE_INT32:
+		case QC_TYPE_UINT32:
+			return 1;
+
+		case QC_TYPE_INT64:
+		case QC_TYPE_UINT64:
+			return 1;
+
+		case QC_TYPE_DOUBLE:
+			return 1;
 
 		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_VARIANT);
 		QCVM_UNIMPLEMENTED_SIZE(QC_TYPE_STRUCT);

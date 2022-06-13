@@ -5,7 +5,7 @@
 #define qcFatal(fmtStr, ...) \
 	(qcLogFatal((fmtStr) __VA_OPT__(,) __VA_ARGS__), std::exit(EXIT_FAILURE), 0)
 
-QC_Value qcvm_printFloatAndDouble(void **args){
+QC_Value qcvm_printFloatAndDouble(QC_VM*, void **args){
 	const auto valPtr = reinterpret_cast<const QC_Float*>(args[0]);
 	qcLogInfo("printFloat: %f", *valPtr);
 	return { .f32 = *valPtr * 2.f };

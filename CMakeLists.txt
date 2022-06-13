@@ -32,7 +32,13 @@ FetchContent_Declare(
 	GIT_TAG 7243b4601b5d7e989550c158a9918ea5a05feaf4 # latest at time of writing
 )
 
-FetchContent_MakeAvailable(parallel_hashmap_content plf_colony_content)
+FetchContent_Declare(
+	fmtlib_content
+	GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+	GIT_TAG 8e47cfd1cdfa9cb29cbb5ae037124cd71425a1fe # latest at time of writing
+)
+
+FetchContent_MakeAvailable(parallel_hashmap_content plf_colony_content fmtlib_content)
 
 add_library(plf_colony INTERFACE)
 target_include_directories(plf_colony INTERFACE ${plf_colony_content_SOURCE_DIR})
@@ -46,8 +52,10 @@ set(QCVM_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 set(
 	QCVM_C_HEADERS
 	${QCVM_INCLUDE_DIR}/qcvm/common.h
+	${QCVM_INCLUDE_DIR}/qcvm/string.h
 	${QCVM_INCLUDE_DIR}/qcvm/bytecode.h
 	${QCVM_INCLUDE_DIR}/qcvm/vm.h
+	${QCVM_INCLUDE_DIR}/qcvm/builtins.h
 )
 
 add_subdirectory(src)
