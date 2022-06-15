@@ -45,14 +45,46 @@ typedef QC_Uint32 QC_String;
 
 typedef QC_Uint32 QC_Enum;
 typedef QC_Uint32 QC_Bool;
-typedef QC_Uint64 QC_Entity; // TODO: check compatibility with 64-bit types
+typedef QC_Uint64 QC_Entity; // TODO: check quakec compatibility with 64-bit types
 
 typedef float QC_Float;
 typedef double QC_Double;
 
+#ifndef __STDC_IEC_559__
+#error "QCVM expects IEEE 754 floating point numbers"
+#endif
+
+static_assert(sizeof(QC_Float) == 4, "QCVM expects 32-bit floats");
+static_assert(sizeof(QC_Double) == 8, "QCVM expects 64-bit doubles");
+
+typedef QC_Float QC_Float32;
+typedef QC_Double QC_Float64;
+
 typedef struct QC_Vector{
 	QC_Float x, y, z;
 } QC_Vector;
+
+static_assert(sizeof(QC_Vector) == 12, "misaligned QC_Vector");
+
+typedef struct QC_StrView{
+	const char *ptr;
+	uintptr_t len;
+} QC_StrView;
+
+#define QC_STRVIEW(lit) (QC_StrView{ lit, sizeof(lit)-1 })
+#define QC_EMPTY_STRVIEW (QC_StrView{ NULL, 0 })
+
+#ifdef __cplusplus
+#define QC_MIN(a, b) ([](auto &&a_, auto &&b_){ return (a_ < b_) ? a_ : b_; }((a), (b)))
+#define QC_MAX(a, b) ([](auto &&a_, auto &&b_){ return (a_ > b_) ? a_ : b_; }((a), (b)))
+#elif __GNUC__
+#define QC_MIN(a, b) ({ __typeof__(a) a_ = (a); __typeof__(b) b_ = (b); _a < _b ? a_ : b_; })
+#define QC_MAX(a, b) ({ __typeof__(a) a_ = (a); __typeof__(b) b_ = (b); _a > _b ? a_ : b_; })
+#else
+#error "Unsupported compiler"
+#endif
+
+int qcStrCmp(QC_StrView a, QC_StrView b);
 
 #ifdef __GNUC__
 typedef QC_Float QC_Vec4 __attribute__((vector_size(16)));
@@ -96,6 +128,8 @@ static inline QC_Vec4 qcVec4Normalize(QC_Vec4 v){
 }
 
 typedef union QC_Value{
+	QC_Uint8 u8;
+	QC_Int8 i8;
 	QC_Uint16 u16;
 	QC_Int16 i16;
 	QC_Uint32 u32;
@@ -115,7 +149,8 @@ enum QC_Type{
 	// Vanilla types
 	QC_TYPE_VOID = 0x0,
 	QC_TYPE_STRING	= 0x1,
-	QC_TYPE_FLOAT	= 0x2,
+	QC_TYPE_FLOAT32	= 0x2,
+	QC_TYPE_FLOAT	= QC_TYPE_FLOAT32,
 	QC_TYPE_VECTOR	= 0x3,
 	QC_TYPE_ENTITY	= 0x4,
 	QC_TYPE_FIELD	= 0x5,
@@ -126,7 +161,8 @@ enum QC_Type{
 	QC_TYPE_UINT32	= 0x8,
 	QC_TYPE_INT64	= 0x9,
 	QC_TYPE_UINT64	= 0xA,
-	QC_TYPE_DOUBLE	= 0xB,
+	QC_TYPE_FLOAT64	= 0xB,
+	QC_TYPE_DOUBLE	= QC_TYPE_FLOAT64,
 
 	// qc-only types (qc?)
 	QC_TYPE_VARIANT		= 0xC,
@@ -144,7 +180,7 @@ enum QC_Type{
  * @param type Type code
  * @returns Size of type referred to by \p type
  */
-QC_Uint32 qcTypeSize(QC_Type type);
+QC_Uint32 qcTypeSize(QC_Uint32 type);
 
 typedef struct QC_Allocator{
 	void*(*alloc)(void *user, size_t size, size_t alignment);

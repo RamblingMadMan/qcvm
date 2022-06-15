@@ -27,19 +27,22 @@ struct QC_VM_Fn{
 	QC_String nameIdx;
 };
 
+typedef QC_Value(*QC_BuiltinFn)(QC_VM *vm, void *user, void **args);
+
 typedef struct QC_VM_Fn_Native QC_VM_Fn_Native;
 struct QC_VM_Fn_Native{
 	QCVM_DERIVED(QC_VM_Fn)
-	QC_Type retType;
+	QC_Uint32 retType;
 	QC_Uint32 nParams;
-	QC_Type paramTypes[8];
-	QC_Value(*ptr)(QC_VM *vm, void **args);
+	QC_Uint32 paramTypes[8];
+	QC_BuiltinFn ptr;
+	void *user;
 };
 
 bool qcMakeNativeFn(
-	QC_Type retType,
-	QC_Uint32 nParams, const QC_Type *paramTypes,
-	QC_Value(*ptr)(QC_VM *vm, void**),
+	QC_Uint32 retType,
+	QC_Uint32 nParams, const QC_Uint32 *paramTypes,
+	QC_BuiltinFn ptr,
 	QC_VM_Fn_Native *ret
 );
 
@@ -61,13 +64,19 @@ typedef struct QC_VM_Value{
 	QC_Value value;
 } QC_VM_Value;
 
-QC_VM *qcCreateVMA(const QC_Allocator *allocator);
+typedef enum QC_VM_CreateFlags{
+	QC_VM_CREATE_DEFAULT_BUILTINS = 1u,
+} QC_VM_CreateFlags;
 
-static inline QC_VM *qcCreateVM(){
-	return qcCreateVMA(QC_DEFAULT_ALLOC);
+QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags);
+
+static inline QC_VM *qcCreateVM(QC_Uint32 flags){
+	return qcCreateVMA(QC_DEFAULT_ALLOC, flags);
 }
 
 bool qcDestroyVM(QC_VM *vm);
+
+bool qcVMResetDefaultBuiltins(QC_VM *vm);
 
 bool qcVMSetBuiltin(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrideExisting);
 bool qcVMGetBuiltin(const QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native *ret);

@@ -388,7 +388,7 @@ QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_
 	return idx;
 }
 
-QC_Uint32 qcTypeSize(QC_Type type){
+QC_Uint32 qcTypeSize(QC_Uint32 type){
 #define QCVM_UNIMPLEMENTED_SIZE(case_) \
     case case_: qcLogError("unimplemented type code 0x%ux (" #case_ ")", case_); return UINT32_MAX
 

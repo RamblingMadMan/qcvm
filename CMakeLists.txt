@@ -38,7 +38,24 @@ FetchContent_Declare(
 	GIT_TAG 8e47cfd1cdfa9cb29cbb5ae037124cd71425a1fe # latest at time of writing
 )
 
-FetchContent_MakeAvailable(parallel_hashmap_content plf_colony_content fmtlib_content)
+set(
+	QCVM_CONTENT_DEPS
+	parallel_hashmap_content
+	plf_colony_content
+	fmtlib_content
+)
+
+if(QCVM_BUILD_TEST)
+	FetchContent_Declare(
+		catch2_content
+		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+		GIT_TAG 20d413b8b6803c6d456874935d7014fe684e9426 # latest v2.x at time of writing
+	)
+
+	list(APPEND QCVM_CONTENT_DEPS catch2_content)
+endif()
+
+FetchContent_MakeAvailable(${QCVM_CONTENT_DEPS})
 
 add_library(plf_colony INTERFACE)
 target_include_directories(plf_colony INTERFACE ${plf_colony_content_SOURCE_DIR})
@@ -56,6 +73,14 @@ set(
 	${QCVM_INCLUDE_DIR}/qcvm/bytecode.h
 	${QCVM_INCLUDE_DIR}/qcvm/vm.h
 	${QCVM_INCLUDE_DIR}/qcvm/builtins.h
+	${QCVM_INCLUDE_DIR}/qcvm/lex.h
+)
+
+set(
+	QCVM_CPP_HEADERS
+	${QCVM_INCLUDE_DIR}/qcvm/common.hpp
+	${QCVM_INCLUDE_DIR}/qcvm/hash.hpp
+	${QCVM_INCLUDE_DIR}/qcvm/vm.hpp
 )
 
 add_subdirectory(src)

@@ -1,68 +1,97 @@
 #include "qcvm/vm.h"
+#include "qcvm/lex.h"
+
+#include "qcvm/common.hpp"
+
+#define CATCH_CONFIG_MAIN
+#include "catch2/catch.hpp"
 
 #include <cstdlib>
 
-#define qcFatal(fmtStr, ...) \
-	(qcLogFatal((fmtStr) __VA_OPT__(,) __VA_ARGS__), std::exit(EXIT_FAILURE), 0)
-
-QC_Value qcvm_printFloatAndDouble(QC_VM*, void **args){
+QC_Value qcvm_printFloatAndDouble(QC_VM*, void*, void **args){
 	const auto valPtr = reinterpret_cast<const QC_Float*>(args[0]);
 	qcLogInfo("printFloat: %f", *valPtr);
 	return { .f32 = *valPtr * 2.f };
 }
 
-int main(int argc, char *argv[]){
-	(void)argc; (void)argv;
+constexpr QC_StrView lexTest0Src = QC_STRVIEW(
+R"(my test ids
+123 1.2 2.3
+void(int x, float, int64) testBuiltinDef = #0;
+)"
+);
 
-	const auto vm = qcCreateVM();
-	if(!vm){
-		qcFatal("failed to create VM");
+const QC_Token lexTest0Expected[] = {
+	// my test ids
+	{ QC_TOKEN_ID,			{ 0, 0 },		QC_STRVIEW("my") },
+	{ QC_TOKEN_SPACE,		{ 2, 0 },		QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,			{ 3, 0 },		QC_STRVIEW("test") },
+	{ QC_TOKEN_SPACE,		{ 7, 0 },		QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,			{ 8, 0 },		QC_STRVIEW("ids") },
+	{ QC_TOKEN_NEWLINE,	{ 11, 0 },	QC_STRVIEW("\n") },
+
+	// 123 1.2 2.3
+	{ QC_TOKEN_INT,		{ 0, 1 },		QC_STRVIEW("123") },
+	{ QC_TOKEN_SPACE,		{ 3, 1 },		QC_STRVIEW(" ") },
+	{ QC_TOKEN_FLOAT,		{ 4, 1 },		QC_STRVIEW("1.2") },
+	{ QC_TOKEN_SPACE,		{ 7, 1 },		QC_STRVIEW(" ") },
+	{ QC_TOKEN_FLOAT,		{ 8, 1 },		QC_STRVIEW("2.3") },
+	{ QC_TOKEN_NEWLINE,	{ 11, 1 },	QC_STRVIEW("\n") },
+
+	// void(int x, float, int64) testBuiltinDef = #0;
+	{ QC_TOKEN_ID,		{ 0, 2 },		QC_STRVIEW("void") },
+	{ QC_TOKEN_BRACKET,	{ 4, 2 },		QC_STRVIEW("(") },
+	{ QC_TOKEN_ID,		{ 5, 2 },		QC_STRVIEW("int") },
+	{ QC_TOKEN_SPACE,		{ 8, 2 },		QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,		{ 9, 2 },		QC_STRVIEW("x") },
+	{ QC_TOKEN_OP,		{ 10, 2 },	QC_STRVIEW(",") },
+	{ QC_TOKEN_SPACE,		{ 11, 2 },	QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,		{ 12, 2 },	QC_STRVIEW("float") },
+	{ QC_TOKEN_OP,		{ 17, 2 },	QC_STRVIEW(",") },
+	{ QC_TOKEN_SPACE,		{ 18, 2 },	QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,		{ 19, 2 },	QC_STRVIEW("int64") },
+	{ QC_TOKEN_BRACKET,	{ 24, 2 },	QC_STRVIEW(")") },
+	{ QC_TOKEN_SPACE,		{ 25, 2 },	QC_STRVIEW(" ") },
+	{ QC_TOKEN_ID,		{ 26, 2 },	QC_STRVIEW("testBuiltinDef") },
+	{ QC_TOKEN_SPACE,		{ 40, 2 },	QC_STRVIEW(" ") },
+	{ QC_TOKEN_OP,		{ 41, 2 },	QC_STRVIEW("=") },
+	{ QC_TOKEN_SPACE,		{ 42, 2 },	QC_STRVIEW(" ") },
+	{ QC_TOKEN_OP,		{ 43, 2 },	QC_STRVIEW("#") },
+	{ QC_TOKEN_INT,		{ 44, 2 },	QC_STRVIEW("0") },
+	{ QC_TOKEN_OP,		{ 45, 2 },	QC_STRVIEW(";") },
+	{ QC_TOKEN_NEWLINE,	{ 46, 2 },	QC_STRVIEW("\n") },
+};
+
+TEST_CASE( "default VM initialization", "[vm-init]" ){
+	QC_VM *vm = qcCreateVM(0);
+
+	REQUIRE(vm);
+
+	SECTION( "initializing virtual machine defaults" ){
+		const auto initialized = qcVMResetDefaultBuiltins(vm);
+
+		REQUIRE(initialized);
 	}
 
-	const QC_Type nativeFnArgTypes[] = {
-		QC_TYPE_FLOAT
-	};
+	const bool destroyed = qcDestroyVM(vm);
 
-	QC_VM_Fn_Native nativePrintFloat;
-	if(!qcMakeNativeFn(
-		QC_TYPE_FLOAT,
-		1, nativeFnArgTypes,
-		qcvm_printFloatAndDouble,
-		&nativePrintFloat
-	)){
-		qcDestroyVM(vm);
-		qcFatal("failed to create native function");
+	REQUIRE(destroyed);
+}
+
+TEST_CASE( "simple lexing", "[lex]" ){
+	QC_Token token;
+	QC_SourceLocation nextLoc = { 0, 0 };
+	QC_StrView rem = lexTest0Src;
+
+	for(std::size_t i = 0; i < std::size(lexTest0Expected); i++){
+		const auto &expected = lexTest0Expected[i];
+
+		rem = qcLex(rem, nextLoc, &token, &nextLoc);
+
+		REQUIRE(rem.ptr);
+		REQUIRE(token.kind == expected.kind);
+		REQUIRE(token.loc.col == expected.loc.col);
+		REQUIRE(token.loc.line == expected.loc.line);
+		REQUIRE(token.str == expected.str);
 	}
-
-	if(!qcVMSetBuiltin(vm, 0, nativePrintFloat, true)){
-		qcDestroyVM(vm);
-		qcFatal("failed to set builtin");
-	}
-
-	QC_VM_Fn_Native nativeReturned;
-	if(!qcVMGetBuiltin(vm, 0, &nativeReturned)){
-		qcDestroyVM(vm);
-		qcFatal("failed to get previously set builtin");
-	}
-
-	QC_Value execArgs[] = {
-		QC_Value{ .f32 = 12.34f }
-	};
-
-	QC_Value execRet;
-	if(!qcVMExec(vm, QCVM_SUPER(&nativeReturned), 1, execArgs, &execRet)){
-		qcDestroyVM(vm);
-		qcFatal("failed to execute builtin");
-	}
-
-	if(execRet.f32 != execArgs[0].f32 * 2.f){
-		qcDestroyVM(vm);
-		qcFatal("wrong value returned from builtin: %f (expected %f)", execRet.f32, execArgs[0].f32 * 2.f);
-	}
-
-	if(!qcDestroyVM(vm)){
-		qcFatal("error destroying VM");
-	}
-
-	return 0;
 }

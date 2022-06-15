@@ -24,7 +24,7 @@ QC_StringBuffer *qcCreateStringBufferA(const QC_Allocator *allocator){
 
 	p->allocator = allocator;
 	p->buf.resize(1024, '\0');
-	p->taken.emplace(0, 1);
+	p->taken.emplace(0, 0);
 
 	return p;
 }
@@ -56,7 +56,7 @@ QC_String qcStringBufferEmplace(QC_StringBuffer *buf, const char *str, size_t le
 
 	const auto reqRes = std::search(
 		buf->buf.begin(), buf->buf.end(),
-		reqStr.begin(), reqStr.end()
+		std::boyer_moore_searcher(reqStr.begin(), reqStr.end())
 	);
 
 	if(reqRes != buf->buf.end()){
@@ -67,7 +67,7 @@ QC_String qcStringBufferEmplace(QC_StringBuffer *buf, const char *str, size_t le
 		}
 	}
 
-	const auto lastTaken = buf->taken.rbegin().base();
+	const auto lastTaken = buf->taken.rbegin();
 	const auto lastIdx = lastTaken->first;
 	const auto lastLen = lastTaken->second;
 

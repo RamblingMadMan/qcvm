@@ -1,5 +1,6 @@
 #include "qcvm/vm.h"
 #include "qcvm/string.h"
+#include "qcvm/hash.hpp"
 
 #include "parallel_hashmap/phmap_fwd_decl.h"
 #include "parallel_hashmap/phmap.h"
@@ -11,6 +12,8 @@
 
 #include <vector>
 #include <charconv>
+
+using namespace qcvm::hash_literals;
 
 template<
 	class Key, class Value,
@@ -38,9 +41,9 @@ using FlatMap = phmap::btree_map<Key, Value, Compare, Alloc>;
 extern "C" {
 
 bool qcMakeNativeFn(
-	QC_Type retType,
-	QC_Uint32 nParams, const QC_Type *paramTypes,
-	QC_Value(*ptr)(QC_VM *vm, void**),
+	QC_Uint32 retType,
+	QC_Uint32 nParams, const QC_Uint32 *paramTypes,
+	QC_BuiltinFn ptr,
 	QC_VM_Fn_Native *ret
 ){
 	if(!ret){
@@ -111,7 +114,10 @@ struct QC_VM{
 	plf::colony<QC_VM_Entity> ents;
 };
 
-QC_VM *qcCreateVMA(const QC_Allocator *allocator){
+static bool qcVMSetBuiltin_unsafe(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrideExisting);
+static void qcVMResetDefaultBuiltins_unsafe(QC_VM *vm);
+
+QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags){
 	const auto mem = qcAllocA(allocator, sizeof(QC_VM), alignof(QC_VM));
 	if(!mem){
 		qcLogError("failed to allocate memory for QC_VM");
@@ -127,7 +133,7 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator){
 		.normalize = [](QC_VM*, QC_Vector v) -> QC_Vector{
 			const auto vec = qcVec4(v.x, v.y, v.z, 0.f);
 			const auto norm = qcVec4Normalize(vec);
-			return QC_Vector{ QC_VEC4_X(norm), QC_VEC4_Y(norm), QC_VEC4_Z(norm) };
+			return QC_Vector{QC_VEC4_X(norm), QC_VEC4_Y(norm), QC_VEC4_Z(norm)};
 		},
 		.vlen = [](QC_VM*, QC_Vector v) -> QC_Float{
 			const auto vec = qcVec4(v.x, v.y, v.z, 0.f);
@@ -150,13 +156,13 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator){
 				QC_String ret;
 			};
 
-			Data user = { .vm = vm, .ret = 0 };
+			Data user = {.vm = vm, .ret = 0};
 
 			qcStringView(
 				vm->strBuf,
 				3, strs,
 				[](void *user, const char *const *strs, const size_t *lens){
-					const auto data = reinterpret_cast<Data*>(user);
+					const auto data = reinterpret_cast<Data *>(user);
 					const auto ret = fmt::format(
 						"{} {} {}",
 						std::string_view(strs[0], lens[0]),
@@ -182,7 +188,7 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator){
 				vm->strBuf,
 				1, &s,
 				[](void *user, const char *const *strs, const size_t *lens){
-					const auto ret = reinterpret_cast<QC_Float*>(user);
+					const auto ret = reinterpret_cast<QC_Float *>(user);
 					const auto convRes = std::from_chars(strs[0], strs[0] + lens[0], *ret);
 					if(convRes.ec == std::errc::invalid_argument){
 						*ret = std::numeric_limits<QC_Float>::quiet_NaN();
@@ -194,6 +200,10 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator){
 			return ret;
 		}
 	};
+
+	if(flags & QC_VM_CREATE_DEFAULT_BUILTINS){
+		qcVMResetDefaultBuiltins_unsafe(p);
+	}
 
 	return p;
 }
@@ -213,6 +223,117 @@ bool qcDestroyVM(QC_VM *vm){
 	}
 
 	return true;
+}
+
+static inline void qcVMResetDefaultBuiltins_unsafe(QC_VM *vm){
+	size_t nBuiltins;
+	const auto builtinInfos = qcDefaultBuiltinsInfo(&nBuiltins);
+
+	for(size_t i = 0; i < nBuiltins; i++){
+		const auto builtin = builtinInfos + i;
+		const std::string_view builtinName = builtin->name;
+		QC_VM_Fn_Builtin newBuiltin;
+		std::memset(&newBuiltin, 0, sizeof(newBuiltin));
+
+		const auto newNative = QCVM_SUPER(&newBuiltin);
+		const auto newFn = QCVM_SUPER(newNative);
+
+		switch(qcvm::hash(builtinName)){
+
+#define QCVM_CASE_1(fn, retTy, argT) \
+                case #fn##_hash: \
+                    newNative->ptr = [](QC_VM *vm, void*, void **args) -> QC_Value{ \
+                        const auto arg = reinterpret_cast<const argT*>(args[0]); \
+                        return QC_Value{ .retTy = vm->vmBuiltins.fn(vm, *arg) }; \
+                    }; \
+					break;
+
+			QCVM_CASE_1(normalize,	v32, QC_Vector)
+			QCVM_CASE_1(vlen,		f32, QC_Vector)
+			QCVM_CASE_1(ftos,		u32, QC_Float)
+			QCVM_CASE_1(vtos,		u32, QC_Vector)
+			QCVM_CASE_1(rint,		f32, QC_Float)
+			QCVM_CASE_1(floor,		f32, QC_Float)
+			QCVM_CASE_1(ceil,		f32, QC_Float)
+			QCVM_CASE_1(fabs,		f32, QC_Float)
+			QCVM_CASE_1(stof,		f32, QC_String)
+
+#undef QCVM_CASE_1
+
+			default: break;
+		}
+
+		if(!newNative->ptr){
+			continue;
+		}
+
+		newFn->type = QC_VM_FN_BUILTIN;
+		newFn->nameIdx = qcStringBufferEmplace(vm->strBuf, builtinName.data(), builtinName.length());
+
+		newNative->retType = builtin->retType;
+		newNative->nParams = builtin->nParams;
+		std::memcpy(newNative->paramTypes, builtin->paramTypes, builtin->nParams * sizeof(QC_Uint32));
+
+		newBuiltin.index = builtin->index;
+
+		qcVMSetBuiltin_unsafe(vm, builtin->index, *newNative, true);
+	}
+}
+
+bool qcVMResetDefaultBuiltins(QC_VM *vm){
+	if(!vm){
+		qcLogError("NULL vm argument passed");
+		return false;
+	}
+
+	qcVMResetDefaultBuiltins_unsafe(vm);
+	return true;
+}
+
+static inline bool qcVMSetBuiltin_unsafe(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrideExisting){
+	QCVM_SUPER(&fn)->type = QC_VM_FN_BUILTIN;
+
+	QC_VM_Fn_Builtin newBuiltin = {
+		.QCVM_SUPER_MEMBER = fn,
+		.index = index
+	};
+
+	const auto setIfNamed = [vm, &fn, &newBuiltin]{
+		if(QCVM_SUPER(&fn)->nameIdx == 0){
+			return;
+		}
+
+		struct Data{
+			QC_VM *vm;
+			QC_VM_Fn_Builtin *fn;
+		};
+
+		auto data = Data{ .vm = vm, .fn = &newBuiltin };
+
+		qcStringView(
+			vm->strBuf,
+			1, &QCVM_SUPER(&fn)->nameIdx,
+			[](void *user, const char *const *strs, const size_t *lens){
+				const auto data = reinterpret_cast<Data*>(user);
+				data->vm->fns[std::string_view(strs[0], lens[0])] = QC_VM_FnStorage{ .builtin = *data->fn };
+			},
+			&data
+		);
+	};
+
+	const auto emplaceRes = vm->builtins.try_emplace(index, newBuiltin);
+	if(emplaceRes.second){
+		setIfNamed();
+		return true;
+	}
+	else if(overrideExisting){
+		emplaceRes.first->second = newBuiltin;
+		setIfNamed();
+		return true;
+	}
+	else{
+		return false;
+	}
 }
 
 bool qcVMSetBuiltin(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrideExisting){
@@ -241,24 +362,7 @@ bool qcVMSetBuiltin(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrid
 		}
 	}
 
-	QCVM_SUPER(&fn)->type = QC_VM_FN_BUILTIN;
-
-	QC_VM_Fn_Builtin newBuiltin = {
-		.QCVM_SUPER_MEMBER = fn,
-		.index = index
-	};
-
-	const auto emplaceRes = vm->builtins.try_emplace(index, newBuiltin);
-	if(emplaceRes.second){
-		return true;
-	}
-	else if(overrideExisting){
-		emplaceRes.first->second = newBuiltin;
-		return true;
-	}
-	else{
-		return false;
-	}
+	return qcVMSetBuiltin_unsafe(vm, index, fn, overrideExisting);
 }
 
 bool qcVMGetBuiltin(const QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native *ret){
@@ -326,7 +430,7 @@ bool qcVMExecNative_unsafe(QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs
 		}
 	}
 
-	*ret = fn->ptr(vm, argPtrs);
+	*ret = fn->ptr(vm, fn->user, argPtrs);
 	return true;
 }
 

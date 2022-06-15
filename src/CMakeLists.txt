@@ -3,10 +3,14 @@ set(BUILD_SHARED_LIBS ${QCVM_BUILD_SHARED_LIBS})
 add_library(
     qcvm
 	${QCVM_C_HEADERS}
+	${QCVM_CPP_HEADERS}
 	common.cpp
 	bytecode.cpp
 	vm.cpp
-	string.cpp builtins.cpp)
+	string.cpp
+	builtins.cpp
+	lex.cpp
+)
 
 target_include_directories(qcvm PUBLIC ${QCVM_INCLUDE_DIR})
 
