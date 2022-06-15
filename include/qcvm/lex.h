@@ -1,6 +1,11 @@
 #ifndef QCVM_LEX_H
 #define QCVM_LEX_H 1
 
+/**
+ * @defgroup LexC Lexing
+ * @{
+ */
+
 #include "common.h"
 
 #ifdef __cplusplus
@@ -38,10 +43,14 @@ typedef struct QC_Token{
  * @param nextLoc Pointer to return the next location into
  * @returns The source remaining to be lexed or `QC_EMPTY_STRVIEW` on error (\p ret and \p nextLoc unchanged on error)
  */
-QC_StrView qcLex(QC_StrView src, QC_SourceLocation loc, QC_Token *ret, QC_SourceLocation *nextLoc);
+QCVM_API QC_StrView qcLex(QC_StrView src, QC_SourceLocation loc, QC_Token *ret, QC_SourceLocation *nextLoc);
 
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * @}
+ */
 
 #endif // !QCVM_LEX_H

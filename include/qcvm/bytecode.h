@@ -59,13 +59,19 @@ typedef QC_Field32 QC_Field;
 typedef struct QC_Function QC_Function;
 
 /**
- * @brief Try to load bytecode from memory
+ * @brief Try to create bytecode from in-memory representation
+ * @param allocator Allocator to use for all allocations
  * @param bytes Pointer to the bytecode
  * @param len Size in bytes \p bytes points to
  * @returns Loaded bytecode or `NULL` on error
  * @see qcDestroyByteCode
  */
-QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len);
+QCVM_API QC_ByteCode *qcCreateByteCodeA(const QC_Allocator *allocator, const char *bytes, size_t len);
+
+//! @see qcCreateByteCodeA
+static inline QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
+	return qcCreateByteCodeA(QC_DEFAULT_ALLOC, bytes, len);
+}
 
 /**
  * @brief Free previously loaded bytecode
@@ -73,32 +79,32 @@ QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len);
  * @returns Whether the bytecode was successfully freed
  * @see qcCreateByteCode
  */
-bool qcDestroyByteCode(QC_ByteCode *bc);
+QCVM_API bool qcDestroyByteCode(QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeStringsSize(const QC_ByteCode *bc);
-const char *qcByteCodeStrings(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeStringsSize(const QC_ByteCode *bc);
+QCVM_API const char *qcByteCodeStrings(const QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeNumStatements(const QC_ByteCode *bc);
-const QC_Statement *qcByteCodeStatements(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeNumStatements(const QC_ByteCode *bc);
+QCVM_API const QC_Statement *qcByteCodeStatements(const QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeNumDefs(const QC_ByteCode *bc);
-const QC_Def *qcByteCodeDefs(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeNumDefs(const QC_ByteCode *bc);
+QCVM_API const QC_Def *qcByteCodeDefs(const QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeNumFields(const QC_ByteCode *bc);
-const QC_Field *qcByteCodeFields(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeNumFields(const QC_ByteCode *bc);
+QCVM_API const QC_Field *qcByteCodeFields(const QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeNumFunctions(const QC_ByteCode *bc);
-const QC_Function *qcByteCodeFunctions(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeNumFunctions(const QC_ByteCode *bc);
+QCVM_API const QC_Function *qcByteCodeFunctions(const QC_ByteCode *bc);
 
-QC_Uint32 qcByteCodeNumGlobals(const QC_ByteCode *bc);
-const QC_Value *qcByteCodeGlobals(const QC_ByteCode *bc);
+QCVM_API QC_Uint32 qcByteCodeNumGlobals(const QC_ByteCode *bc);
+QCVM_API const QC_Value *qcByteCodeGlobals(const QC_ByteCode *bc);
 
 /**
  * @brief Create a new bytecode builder
  * @returns A newly created bytecode builder or `NULL` on error
  * @see qcDestroyBuilder
  */
-QC_ByteCodeBuilder *qcCreateBuilder();
+QCVM_API QC_ByteCodeBuilder *qcCreateBuilder();
 
 /**
  * @brief Free a previously created bytecode builder
@@ -107,7 +113,7 @@ QC_ByteCodeBuilder *qcCreateBuilder();
  * @returns Whether \p builder was successfully destroyed
  * @see qcCreateBuilder
  */
-bool qcDestroyBuilder(QC_ByteCodeBuilder *builder);
+QCVM_API bool qcDestroyBuilder(QC_ByteCodeBuilder *builder);
 
 /**
  * @brief Emit the current state of the builder as bytecode
@@ -115,7 +121,7 @@ bool qcDestroyBuilder(QC_ByteCodeBuilder *builder);
  * @param builder Builder to emit from
  * @returns Newly created bytecode or `NULL` on error
  */
-QC_ByteCode *qcBuilderEmit(QC_ByteCodeBuilder *builder);
+QCVM_API QC_ByteCode *qcBuilderEmit(QC_ByteCodeBuilder *builder);
 
 /**
  * @brief Add a single statement to the builder
@@ -123,7 +129,7 @@ QC_ByteCode *qcBuilderEmit(QC_ByteCodeBuilder *builder);
  * @param stmt Statement to add to \p builder
  * @returns The index of the newly created statement or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_Statement *stmt);
+QCVM_API QC_Uint32 qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_Statement *stmt);
 
 /**
  * @brief Add a single definition to the builder
@@ -131,7 +137,7 @@ QC_Uint32 qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_Statement 
  * @param def Definition to add to \p builder
  * @returns The index of the newly created definition or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def);
+QCVM_API QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def);
 
 /**
  * @brief Add a single field to the builder
@@ -139,7 +145,7 @@ QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def);
  * @param field Field to add to \p builder
  * @returns The index of the newly created field or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field *field);
+QCVM_API QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field *field);
 
 /**
  * @brief Add a function definition to a bytecode builder
@@ -147,7 +153,7 @@ QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field *field);
  * @param fn Function to add to \p builder
  * @returns The index of the newly created function or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *fn);
+QCVM_API QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *fn);
 
 /**
  * @brief Add a global definition index to a bytecode builder
@@ -155,7 +161,7 @@ QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *f
  * @param value Global value to add to \p builder
  * @returns The index of the newly created global or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
+QCVM_API QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
 
 /**
  * @brief Add a string to a bytecode builder
@@ -164,7 +170,7 @@ QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
  * @param len Length of the string
  * @returns The offset in the string buffer of the added string or `UINT32_MAX` on error
  */
-QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len);
+QCVM_API QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len);
 
 /**
  * @brief Bytecode sections

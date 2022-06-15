@@ -17,8 +17,8 @@ typedef struct QC_BuiltinInfo{
 	QC_Type paramTypes[8];
 } QC_BuiltinInfo;
 
-const QC_BuiltinInfo *qcDefaultBuiltinsInfo(size_t *nRet);
-const QC_BuiltinInfo *qcQuakeBuiltinsInfo(size_t *nRet);
+QCVM_API const QC_BuiltinInfo *qcDefaultBuiltinsInfo(size_t *nRet);
+QCVM_API const QC_BuiltinInfo *qcQuakeBuiltinsInfo(size_t *nRet);
 
 typedef struct QC_DefaultBuiltins{
 #define QCVM_BUILTIN(index, name, ...) (*name)(QC_VM *vm __VA_OPT__(,) __VA_ARGS__)

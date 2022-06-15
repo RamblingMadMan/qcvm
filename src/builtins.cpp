@@ -1,3 +1,5 @@
+#define QCVM_IMPLEMENTATION
+
 #include "qcvm/builtins.h"
 
 #include <array>

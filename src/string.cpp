@@ -1,3 +1,5 @@
+#define QCVM_IMPLEMENTATION
+
 #include "qcvm/string.h"
 
 #include "parallel_hashmap/btree.h"
@@ -46,11 +48,11 @@ bool qcDestroyStringBuffer(QC_StringBuffer *buf){
 	return true;
 }
 
-QC_String qcStringBufferEmplace(QC_StringBuffer *buf, const char *str, size_t len){
+QC_String qcStringBufferEmplace(QC_StringBuffer *buf, QC_StrView str){
 	QCVM_ASSERT(buf);
-	QCVM_ASSERT(str && len);
+	QCVM_ASSERT(str.ptr && str.len);
 
-	const auto reqStr = std::string_view(str, len);
+	const auto reqStr = std::string_view(str.ptr, str.len);
 
 	std::scoped_lock lock(buf->mut);
 
@@ -61,8 +63,8 @@ QC_String qcStringBufferEmplace(QC_StringBuffer *buf, const char *str, size_t le
 
 	if(reqRes != buf->buf.end()){
 		const QC_Uint32 index = uintptr_t(reqRes.base()) - uintptr_t(buf->buf.begin().base());
-		const auto emplaceRes = buf->taken.try_emplace(index, len);
-		if(emplaceRes.second || emplaceRes.first->second == len){
+		const auto emplaceRes = buf->taken.try_emplace(index, str.len);
+		if(emplaceRes.second || emplaceRes.first->second == str.len){
 			return index;
 		}
 	}
@@ -77,8 +79,8 @@ QC_String qcStringBufferEmplace(QC_StringBuffer *buf, const char *str, size_t le
 		buf->buf.resize(newSize);
 	}
 
-	std::memcpy(buf->buf.data() + nextIdx, str, len);
-	buf->taken.emplace(nextIdx, len);
+	std::memcpy(buf->buf.data() + nextIdx, str.ptr, str.len);
+	buf->taken.emplace(nextIdx, str.len);
 
 	return nextIdx;
 }
@@ -105,24 +107,24 @@ bool qcStringView(const QC_StringBuffer *buf, size_t numStrs, const QC_String *s
 
 	std::scoped_lock lock(buf->mut);
 
-	const char *strs[QCVM_MAX_VIEWS] = { nullptr };
-	size_t lens[QCVM_MAX_VIEWS] = { 0 };
+	QC_StrView strs[QCVM_MAX_VIEWS];
+
+	// this is probably needed so people can't peek other strings on the stack
+	std::memset(strs, 0, sizeof(QC_StrView) * QCVM_MAX_VIEWS);
 
 	for(size_t i = 0; i < numStrs; i++){
 		const auto s = ss[i];
 		const auto res = buf->taken.find(s);
 		if(res == buf->taken.end()){
 			qcLogWarn("could not find QC_String 0x%ux in buffer", s);
-			strs[i] = "\0";
-			lens[i] = 0;
+			strs[i] = QC_STRVIEW("");
 		}
 		else{
-			strs[i] = buf->buf.data() + res->first;
-			lens[i] = res->second;
+			strs[i] = QC_StrView{ buf->buf.data() + res->first, res->second };
 		}
 	}
 
-	viewFn(user, strs, lens);
+	viewFn(user, strs);
 	return true;
 }
 

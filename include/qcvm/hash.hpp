@@ -14,6 +14,10 @@ namespace qcvm{
 			static constexpr Uint32 prime32 = 0x01000193;
 			static constexpr Uint64 prime64 = 0x100000001b3;
 
+			static constexpr Uint32 hash32(const QC_StrView str) noexcept{
+				return hash32(std::string_view(str.ptr, str.len));
+			}
+
 			static constexpr Uint32 hash32(const std::string_view str) noexcept{
 				Uint32 hash = offsetBasis32;
 
@@ -23,6 +27,10 @@ namespace qcvm{
 				}
 
 				return hash;
+			}
+
+			static constexpr Uint64 hash64(const QC_StrView str) noexcept{
+				return hash64(std::string_view(str.ptr, str.len));
 			}
 
 			static constexpr Uint64 hash64(const std::string_view str) noexcept{
@@ -36,7 +44,8 @@ namespace qcvm{
 				return hash;
 			}
 
-			static constexpr auto hash(const std::string_view str) noexcept{
+			template<typename Str>
+			static constexpr auto hash(const Str str) noexcept{
 				#ifdef QCVM_HASH_64
 				return hash64(str);
 				#else
@@ -59,11 +68,20 @@ namespace qcvm{
 		}
 	}
 
-	template<typename T>
-	class DefaultHash;
+	template<typename T> struct DefaultHash;
 
-	template<>
-	class DefaultHash<std::string_view>: public Fnv1aHash{};
+	template<> struct DefaultHash<std::string_view>: Fnv1aHash{};
+	template<> struct DefaultHash<QC_StrView>: Fnv1aHash{};
+
+	template<typename T>
+	constexpr auto hash32(const T &val) noexcept(noexcept(DefaultHash<T>::hash(val))){
+		return DefaultHash<T>::hash32(val);
+	}
+
+	template<typename T>
+	constexpr auto hash64(const T &val) noexcept(noexcept(DefaultHash<T>::hash(val))){
+		return DefaultHash<T>::hash64(val);
+	}
 
 	template<typename T>
 	constexpr auto hash(const T &val) noexcept(noexcept(DefaultHash<T>::hash(val))){

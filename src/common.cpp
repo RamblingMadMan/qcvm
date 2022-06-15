@@ -1,4 +1,8 @@
+#define QCVM_IMPLEMENTATION
+
 #include "qcvm/common.h"
+
+#include "qcvm/hash.hpp"
 
 #include <cstring>
 #include <mutex>
@@ -61,6 +65,9 @@ int qcStrCmp(QC_StrView a, QC_StrView b){
 		return std::strncmp(a.ptr, b.ptr, a.len);
 	}
 }
+
+QC_Uint32 qcStrHash32(QC_StrView str){ return qcvm::hash32(str); }
+QC_Uint64 qcStrHash64(QC_StrView str){ return qcvm::hash64(str); }
 
 static const QC_Allocator qcvm_defaultAllocator = {
 	.alloc = [](void*, size_t size, size_t alignment){ return std::aligned_alloc(alignment, size); },

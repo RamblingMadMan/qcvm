@@ -14,10 +14,29 @@
 #define QCVM_ASSERT(...)
 #endif
 
+#define QCVM_PREDEF(structName) typedef struct structName structName
 #define QCVM_SUPER_MEMBER _super
 #define QCVM_DERIVED(base) base QCVM_SUPER_MEMBER;
 #define QCVM_SUPER(ptr) (&(ptr)->QCVM_SUPER_MEMBER)
 #define QCVM_SUPER2(ptr) (&(ptr)->QCVM_SUPER_MEMBER.QCVM_SUPER_MEMBER)
+
+#if defined(_WIN32)
+	#ifdef __GNUC__
+		#ifdef QCVM_IMPLEMENTATION
+		#define QCVM_API __attribute__((dllexport))
+		#else
+		#define QCVM_API __attribute__((dllimport))
+		#endif
+	#else
+		#ifdef QCVM_IMPLEMENTATION
+		#define QCVM_API __declspec(dllexport)
+		#else
+		#define QCVM_API __declspec(dllimport)
+		#endif
+	#endif
+#else
+#define QCVM_API __attribute__((visibility("default")))
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,7 +103,16 @@ typedef struct QC_StrView{
 #error "Unsupported compiler"
 #endif
 
-int qcStrCmp(QC_StrView a, QC_StrView b);
+QCVM_API int qcStrCmp(QC_StrView a, QC_StrView b);
+
+QCVM_API QC_Uint32 qcStrHash32(QC_StrView str);
+QCVM_API QC_Uint64 qcStrHash64(QC_StrView str);
+
+#ifdef QCVM_HASH_64
+#define qcStrHash qcStrHash64
+#else
+#define qcStrHash qcStrHash32
+#endif
 
 #ifdef __GNUC__
 typedef QC_Float QC_Vec4 __attribute__((vector_size(16)));
@@ -110,6 +138,7 @@ static inline QC_Vec4 qcVec4Add(QC_Vec4 a, QC_Vec4 b){ return QCVM_VEC4_OP(a, b,
 static inline QC_Vec4 qcVec4Sub(QC_Vec4 a, QC_Vec4 b){ return QCVM_VEC4_OP(a, b, -); }
 static inline QC_Vec4 qcVec4Mul(QC_Vec4 a, QC_Vec4 b){ return QCVM_VEC4_OP(a, b, *); }
 static inline QC_Vec4 qcVec4Div(QC_Vec4 a, QC_Vec4 b){ return QCVM_VEC4_OP(a, b, /); }
+#undef QCVM_VEC4_OP
 #endif
 
 #define QC_VEC4_X(v) (QC_VEC4_DATA(v)[0])
@@ -180,7 +209,7 @@ enum QC_Type{
  * @param type Type code
  * @returns Size of type referred to by \p type
  */
-QC_Uint32 qcTypeSize(QC_Uint32 type);
+QCVM_API QC_Uint32 qcTypeSize(QC_Uint32 type);
 
 typedef struct QC_Allocator{
 	void*(*alloc)(void *user, size_t size, size_t alignment);
@@ -188,7 +217,7 @@ typedef struct QC_Allocator{
 	void *user;
 } QC_Allocator;
 
-extern const QC_Allocator *const QC_DEFAULT_ALLOC;
+QCVM_API extern const QC_Allocator *const QC_DEFAULT_ALLOC;
 
 static inline void *qcAllocA(const QC_Allocator *allocator, size_t size, size_t alignment){
 	QCVM_ASSERT(allocator);
@@ -225,10 +254,10 @@ enum QC_LogLevel{
 
 typedef void(*QC_LogHandler)(void *user, QC_LogLevel logLevel, const char *fmtStr, va_list args) QCVM_PRINTF_LIKE(3, 0);
 
-QC_LogHandler qcGetLogHandler(void **userRet);
-void qcSetLogHandler(QC_LogHandler handler, void *user);
+QCVM_API QC_LogHandler qcGetLogHandler(void **userRet);
+QCVM_API void qcSetLogHandler(QC_LogHandler handler, void *user);
 
-void qcLogV(QC_LogLevel level, const char *fmtStr, va_list args) QCVM_PRINTF_LIKE(2, 0);
+QCVM_API void qcLogV(QC_LogLevel level, const char *fmtStr, va_list args) QCVM_PRINTF_LIKE(2, 0);
 
 inline void QCVM_PRINTF_LIKE(2, 3) qcLog(QC_LogLevel level, const char *fmtStr, ...){
 	va_list va;

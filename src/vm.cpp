@@ -1,3 +1,5 @@
+#define QCVM_IMPLEMENTATION
+
 #include "qcvm/vm.h"
 #include "qcvm/string.h"
 #include "qcvm/hash.hpp"
@@ -141,7 +143,7 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags){
 		},
 		.ftos = [](QC_VM *vm, QC_Float v) -> QC_String{
 			const auto str = std::to_string(v);
-			return qcStringBufferEmplace(vm->strBuf, str.c_str(), str.size());
+			return qcStringBufferEmplace(vm->strBuf, QC_StrView{ str.c_str(), str.size() });
 		},
 		.vtos = [](QC_VM *vm, QC_Vector v) -> QC_String{
 			const auto builtins = qcVMDefaultBuiltins(vm);
@@ -161,16 +163,16 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags){
 			qcStringView(
 				vm->strBuf,
 				3, strs,
-				[](void *user, const char *const *strs, const size_t *lens){
+				[](void *user, const QC_StrView *strs){
 					const auto data = reinterpret_cast<Data *>(user);
 					const auto ret = fmt::format(
 						"{} {} {}",
-						std::string_view(strs[0], lens[0]),
-						std::string_view(strs[1], lens[1]),
-						std::string_view(strs[2], lens[2])
+						std::string_view(strs[0].ptr, strs[0].len),
+						std::string_view(strs[1].ptr, strs[1].len),
+						std::string_view(strs[2].ptr, strs[2].len)
 					);
 
-					data->ret = qcStringBufferEmplace(data->vm->strBuf, ret.c_str(), ret.size());
+					data->ret = qcStringBufferEmplace(data->vm->strBuf, QC_StrView{ ret.c_str(), ret.size() });
 				},
 				&user
 			);
@@ -187,9 +189,10 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags){
 			qcStringView(
 				vm->strBuf,
 				1, &s,
-				[](void *user, const char *const *strs, const size_t *lens){
+				[](void *user, const QC_StrView *strs){
 					const auto ret = reinterpret_cast<QC_Float *>(user);
-					const auto convRes = std::from_chars(strs[0], strs[0] + lens[0], *ret);
+					const auto str = strs[0];
+					const auto convRes = std::from_chars(str.ptr, str.ptr + str.len, *ret);
 					if(convRes.ec == std::errc::invalid_argument){
 						*ret = std::numeric_limits<QC_Float>::quiet_NaN();
 					}
@@ -268,7 +271,7 @@ static inline void qcVMResetDefaultBuiltins_unsafe(QC_VM *vm){
 		}
 
 		newFn->type = QC_VM_FN_BUILTIN;
-		newFn->nameIdx = qcStringBufferEmplace(vm->strBuf, builtinName.data(), builtinName.length());
+		newFn->nameIdx = qcStringBufferEmplace(vm->strBuf, QC_StrView{ builtinName.data(), builtinName.length() });
 
 		newNative->retType = builtin->retType;
 		newNative->nParams = builtin->nParams;
@@ -313,9 +316,9 @@ static inline bool qcVMSetBuiltin_unsafe(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Na
 		qcStringView(
 			vm->strBuf,
 			1, &QCVM_SUPER(&fn)->nameIdx,
-			[](void *user, const char *const *strs, const size_t *lens){
+			[](void *user, const QC_StrView *strs){
 				const auto data = reinterpret_cast<Data*>(user);
-				data->vm->fns[std::string_view(strs[0], lens[0])] = QC_VM_FnStorage{ .builtin = *data->fn };
+				data->vm->fns[std::string_view(strs[0].ptr, strs[0].len)] = QC_VM_FnStorage{ .builtin = *data->fn };
 			},
 			&data
 		);
@@ -475,7 +478,7 @@ bool qcVMExec(QC_VM *vm, const QC_VM_Fn *fn, QC_Uint32 nArgs, QC_Value *args, QC
 inline QC_String qcvmByteCodeStringEmplace(QC_StringBuffer *buf, const QC_ByteCode *bc, QC_String index){
 	const auto strs = qcByteCodeStrings(bc);
 	const auto str = std::string_view(strs + index);
-	return qcStringBufferEmplace(buf, str.data(), str.size());
+	return qcStringBufferEmplace(buf, QC_StrView{ str.data(), str.size() });
 }
 
 bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){

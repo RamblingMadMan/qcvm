@@ -1,3 +1,5 @@
+#define QCVM_IMPLEMENTATION
+
 #include "qcvm/bytecode.h"
 
 #include <cstdlib>
@@ -9,6 +11,7 @@
 extern "C"{
 
 struct QC_ByteCode{
+	const QC_Allocator *allocator;
 	std::vector<QC_Statement> stmts;
 	std::vector<QC_Def> defs;
 	std::vector<QC_Field> fields;
@@ -17,7 +20,7 @@ struct QC_ByteCode{
 	std::vector<char> strBuf;
 };
 
-QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
+QC_ByteCode *qcCreateByteCodeA(const QC_Allocator *allocator, const char *bytes, size_t len){
 	if(len < sizeof(QC_Header)){
 		qcLogError("invalid bytecode: size smaller than sizeof(QC_Header)");
 		return nullptr;
@@ -73,6 +76,7 @@ QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
 	const auto numFns    = sectionLen(QC_SECTION_FUNCTIONS);
 	const auto numGlbs   = sectionLen(QC_SECTION_GLOBALS);
 
+	// "all allocations"
 	std::vector<QC_Statement> stmts;
 	std::vector<QC_Def> defs;
 	std::vector<QC_Field> fields;
@@ -162,7 +166,7 @@ QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
 		}
 	}
 
-	auto bcMem = std::aligned_alloc(alignof(QC_ByteCode), sizeof(QC_ByteCode));
+	auto bcMem = qcAllocA(allocator, sizeof(QC_ByteCode), alignof(QC_ByteCode));
 	if(!bcMem){
 		qcLogError("failed to allocate memory for QC_Bytecode");
 		return nullptr;
@@ -170,6 +174,7 @@ QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
 
 	auto p = new(bcMem) QC_ByteCode;
 
+	p->allocator = allocator;
 	p->stmts = std::move(stmts);
 	p->defs = std::move(defs);
 	p->fields = std::move(fields);
@@ -182,8 +187,16 @@ QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
 
 bool qcDestroyByteCode(QC_ByteCode *bc){
 	if(!bc) return false;
+
+	const auto allocator = bc->allocator;
+
 	std::destroy_at(bc);
-	std::free(bc);
+
+	if(!qcFreeA(allocator, bc)){
+		qcLogError("failed to free memory at 0x%p, WARNING! OBJECT DESTROYED!", bc);
+		return false;
+	}
+
 	return true;
 }
 

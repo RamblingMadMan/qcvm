@@ -7,6 +7,8 @@ project(
 	LANGUAGES C CXX
 )
 
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
+
 include(FetchContent)
 
 ###
@@ -70,10 +72,12 @@ set(
 	QCVM_C_HEADERS
 	${QCVM_INCLUDE_DIR}/qcvm/common.h
 	${QCVM_INCLUDE_DIR}/qcvm/string.h
+	${QCVM_INCLUDE_DIR}/qcvm/amath.h
 	${QCVM_INCLUDE_DIR}/qcvm/bytecode.h
 	${QCVM_INCLUDE_DIR}/qcvm/vm.h
 	${QCVM_INCLUDE_DIR}/qcvm/builtins.h
 	${QCVM_INCLUDE_DIR}/qcvm/lex.h
+	${QCVM_INCLUDE_DIR}/qcvm/ast.h
 )
 
 set(
