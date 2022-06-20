@@ -63,7 +63,7 @@ bool qcMakeNativeFn(
 
 	for(QC_Uint32 i = 0; i < nParams; i++){
 		const auto paramType = paramTypes[i];
-		if(paramType > QC_TYPE_COUNT){
+		if(paramType > QC_BYTECODE_TYPE_COUNT){
 			qcLogError("invalid type code 0x%ux for parameter %u", paramType, i);
 			return false;
 		}
@@ -72,7 +72,7 @@ bool qcMakeNativeFn(
 	ret->QCVM_SUPER_MEMBER = QC_VM_Fn{ .type = QC_VM_FN_NATIVE };
 	ret->retType = retType;
 	ret->nParams = nParams;
-	std::memcpy(ret->paramTypes, paramTypes, sizeof(QC_Type) * nParams);
+	std::memcpy(ret->paramTypes, paramTypes, sizeof(QC_ByteCodeType) * nParams);
 	ret->ptr = ptr;
 	return true;
 }
@@ -147,58 +147,34 @@ QC_VM *qcCreateVMA(const QC_Allocator *allocator, QC_Uint32 flags){
 		},
 		.vtos = [](QC_VM *vm, QC_Vector v) -> QC_String{
 			const auto builtins = qcVMDefaultBuiltins(vm);
-			const QC_String strs[] = {
-				builtins->ftos(vm, v.x),
-				builtins->ftos(vm, v.y),
-				builtins->ftos(vm, v.z)
+			const QC_StrView strs[] = {
+				qcString(vm->strBuf, builtins->ftos(vm, v.x)),
+				qcString(vm->strBuf, builtins->ftos(vm, v.y)),
+				qcString(vm->strBuf, builtins->ftos(vm, v.z))
 			};
 
-			struct Data{
-				QC_VM *vm;
-				QC_String ret;
-			};
-
-			Data user = {.vm = vm, .ret = 0};
-
-			qcStringView(
-				vm->strBuf,
-				3, strs,
-				[](void *user, const QC_StrView *strs){
-					const auto data = reinterpret_cast<Data *>(user);
-					const auto ret = fmt::format(
-						"{} {} {}",
-						std::string_view(strs[0].ptr, strs[0].len),
-						std::string_view(strs[1].ptr, strs[1].len),
-						std::string_view(strs[2].ptr, strs[2].len)
-					);
-
-					data->ret = qcStringBufferEmplace(data->vm->strBuf, QC_StrView{ ret.c_str(), ret.size() });
-				},
-				&user
+			const auto ret = fmt::format(
+				"{} {} {}",
+				std::string_view(strs[0].ptr, strs[0].len),
+				std::string_view(strs[1].ptr, strs[1].len),
+				std::string_view(strs[2].ptr, strs[2].len)
 			);
 
-			return user.ret;
+			return qcStringBufferEmplace(vm->strBuf, QC_StrView{ ret.c_str(), ret.size() });
 		},
 		.rint = [](QC_VM*, QC_Float v) -> QC_Float{ return std::round(v); },
 		.floor = [](QC_VM*, QC_Float v) -> QC_Float{ return std::floor(v); },
 		.ceil = [](QC_VM*, QC_Float v) -> QC_Float{ return std::ceil(v); },
 		.fabs = [](QC_VM*, QC_Float v) -> QC_Float{ return std::abs(v); },
 		.stof = [](QC_VM *vm, QC_String s) -> QC_Float{
-			QC_Float ret = 0;
+			const auto str = qcString(vm->strBuf, s);
 
-			qcStringView(
-				vm->strBuf,
-				1, &s,
-				[](void *user, const QC_StrView *strs){
-					const auto ret = reinterpret_cast<QC_Float *>(user);
-					const auto str = strs[0];
-					const auto convRes = std::from_chars(str.ptr, str.ptr + str.len, *ret);
-					if(convRes.ec == std::errc::invalid_argument){
-						*ret = std::numeric_limits<QC_Float>::quiet_NaN();
-					}
-				},
-				&ret
-			);
+			QC_Float32 ret;
+
+			const auto convRes = std::from_chars(str.ptr, str.ptr + str.len, ret);
+			if(convRes.ec == std::errc::invalid_argument){
+				ret = std::numeric_limits<QC_Float>::quiet_NaN();
+			}
 
 			return ret;
 		}
@@ -306,22 +282,9 @@ static inline bool qcVMSetBuiltin_unsafe(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Na
 			return;
 		}
 
-		struct Data{
-			QC_VM *vm;
-			QC_VM_Fn_Builtin *fn;
-		};
+		const auto str = qcString(vm->strBuf, QCVM_SUPER(&fn)->nameIdx);
 
-		auto data = Data{ .vm = vm, .fn = &newBuiltin };
-
-		qcStringView(
-			vm->strBuf,
-			1, &QCVM_SUPER(&fn)->nameIdx,
-			[](void *user, const QC_StrView *strs){
-				const auto data = reinterpret_cast<Data*>(user);
-				data->vm->fns[std::string_view(strs[0].ptr, strs[0].len)] = QC_VM_FnStorage{ .builtin = *data->fn };
-			},
-			&data
-		);
+		vm->fns[std::string_view(str.ptr, str.len)] = QC_VM_FnStorage{ .builtin = newBuiltin };
 	};
 
 	const auto emplaceRes = vm->builtins.try_emplace(index, newBuiltin);
@@ -352,14 +315,14 @@ bool qcVMSetBuiltin(QC_VM *vm, QC_Uint32 index, QC_VM_Fn_Native fn, bool overrid
 		qcLogError("invalid number of function parameters %u (max 8) for builtin %u", fn.nParams, index);
 		return false;
 	}
-	else if(fn.retType >= QC_TYPE_COUNT){
+	else if(fn.retType >= QC_BYTECODE_TYPE_COUNT){
 		qcLogError("invalid return type code 0x%ux for builtin %u", fn.retType, index);
 		return false;
 	}
 
 	for(QC_Uint32 i = 0; i < fn.nParams; i++){
 		const auto paramType = fn.paramTypes[i];
-		if(paramType >= QC_TYPE_COUNT){
+		if(paramType >= QC_BYTECODE_TYPE_COUNT){
 			qcLogError("invalid parameter type code 0x%ux for builtin %u", paramType, index);
 			return false;
 		}
@@ -421,7 +384,7 @@ bool qcVMExecNative_unsafe(QC_VM *vm, const QC_VM_Fn_Native *fn, QC_Uint32 nargs
 
 	for(QC_Uint32 i = 0; i < nargs; i++){
 		const auto argType = fn->paramTypes[i];
-		const auto argSize = qcTypeSize(argType);
+		const auto argSize = qcByteCodeTypeSize(argType);
 		switch(argSize){
 			case 1: argPtrs[i] = &args[i].u64; break;
 			case 3: argPtrs[i] = &args[i].v32; break;
@@ -524,7 +487,7 @@ bool qcVMLoadByteCode(QC_VM *vm, const QC_ByteCode *bc, QC_Uint32 loadFlags){
 
 			for(QC_Uint32 j = 0; j < nativeFn->nParams; j++){
 				const auto builtinParamType = nativeFn->paramTypes[j];
-				const auto builtinParamSize = qcTypeSize((QC_Type)builtinParamType);
+				const auto builtinParamSize = qcByteCodeTypeSize((QC_ByteCodeType) builtinParamType);
 				const auto fnParamSize = fn->argSizes[j];
 				if(fnParamSize != builtinParamSize){
 					qcLogError(

@@ -21,11 +21,11 @@ QCVM_API bool qcDestroyStringBuffer(QC_StringBuffer *buf);
 
 QCVM_API QC_String qcStringBufferEmplace(QC_StringBuffer *buf, QC_StrView str);
 
-QCVM_API bool qcStringBufferErase(QC_StringBuffer *buf, QC_String s);
+QCVM_API bool qcStringBufferErase(QC_StringBuffer *buf, QC_String s, bool clearBytes QCVM_DEFAULT_VALUE(false));
 
 typedef void(*QC_StringViewFn)(void *user, const QC_StrView *strs);
 
-QCVM_API bool qcStringView(const QC_StringBuffer *buf, size_t numStrs, const QC_String *ss, QC_StringViewFn viewFn, void *user);
+QCVM_API QC_StrView qcString(const QC_StringBuffer *buf, QC_String s);
 
 #ifdef __cplusplus
 }

@@ -25,6 +25,8 @@ namespace qcvm{
 		template<> struct ToQC_Value<Vec4>{ static constexpr QC_Value value(Vec4 v){ return QC_Value{ .v4f32 = v }; } };
 	}
 
+	template<> struct DefaultTypeString<QC_VM>: detail::ConstStrGetter<"VM"_cstr>{};
+
 	class VM{
 		public:
 			VM(Uint32 flags, const QC_Allocator *allocator = QC_DEFAULT_ALLOC)

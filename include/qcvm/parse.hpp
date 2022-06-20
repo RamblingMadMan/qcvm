@@ -1,8 +1,10 @@
-//
-// Created by keith on 19/06/22.
-//
-
 #ifndef QCVM_PARSE_HPP
-#define QCVM_PARSE_HPP
+#define QCVM_PARSE_HPP 1
 
-#endif //QCVM_PARSE_HPP
+#include "parse.h"
+
+namespace qcvm{
+
+}
+
+#endif // !QCVM_PARSE_HPP

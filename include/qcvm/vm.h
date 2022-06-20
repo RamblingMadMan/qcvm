@@ -8,6 +8,7 @@
 
 #include "bytecode.h"
 #include "builtins.h"
+#include "types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,7 +51,7 @@ typedef struct QC_VM_Fn_Bytecode QC_VM_Fn_Bytecode;
 struct QC_VM_Fn_Bytecode{
 	QCVM_DERIVED(QC_VM_Fn)
 	const QC_ByteCode *bc;
-	const QC_Function *fn;
+	const QC_ByteCodeFunction *fn;
 };
 
 typedef struct QC_VM_Fn_Builtin QC_VM_Fn_Builtin;

@@ -4,11 +4,22 @@
 
 #include "qcvm/hash.hpp"
 
+#ifdef __linux__
+#include <unistd.h>
+static inline QC_Uintptr qcvm_getPageSize(){ return QC_Uintptr(sysconf(_SC_PAGESIZE)); }
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static inline QC_Uintptr qcvm_getPageSize(){ return 4096; } // TODO
+#else
+static inline QC_Uintptr qcvm_getPageSize(){ return 4096; }
+#endif
+
 #include <cstring>
 #include <mutex>
 
 static void QCVM_PRINTF_LIKE(3, 0) qcvm_defaultLogHandler(void*, QC_LogLevel level, const char *fmtStr, va_list args){
-	static char msgBuf[1024] = {'\0'};
+	char msgBuf[1024] = {'\0'};
 	vsnprintf(msgBuf, 1023, fmtStr, args);
 
 	std::FILE *outFile = stdout;
@@ -76,6 +87,8 @@ static const QC_Allocator qcvm_defaultAllocator = {
 };
 
 const QC_Allocator *const QC_DEFAULT_ALLOC = &qcvm_defaultAllocator;
+
+QC_Uintptr qcPageSize(){ return qcvm_getPageSize(); }
 
 QC_LogHandler qcGetLogHandler(void **userRet){
 	std::scoped_lock lock(qcvm_logMut);

@@ -1,7 +1,7 @@
 #ifndef QCVM_BUILTINS_H
 #define QCVM_BUILTINS_H 1
 
-#include "common.h"
+#include "bytecode.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,9 +12,9 @@ typedef struct QC_VM QC_VM;
 typedef struct QC_BuiltinInfo{
 	QC_Uint32 index;
 	const char *name;
-	QC_Type retType;
+	QC_ByteCodeType retType;
 	QC_Uint32 nParams;
-	QC_Type paramTypes[8];
+	QC_ByteCodeType paramTypes[8];
 } QC_BuiltinInfo;
 
 QCVM_API const QC_BuiltinInfo *qcDefaultBuiltinsInfo(size_t *nRet);

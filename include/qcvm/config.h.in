@@ -1,0 +1,6 @@
+#ifndef QCVM_CONFIG_H
+#define QCVM_CONFIG_H 1
+
+#cmakedefine QCVM_SHARED_LIB 1
+
+#endif // !QCVM_CONFIG_H

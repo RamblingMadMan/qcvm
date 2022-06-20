@@ -15,48 +15,112 @@ extern "C" {
 #endif
 
 /**
+* @brief Bytecode data types
+*/
+enum QC_ByteCodeType{
+	// Vanilla types
+	QC_BYTECODE_TYPE_VOID		= 0x0,
+	QC_BYTECODE_TYPE_STRING		= 0x1,
+	QC_BYTECODE_TYPE_FLOAT32	= 0x2,
+	QC_BYTECODE_TYPE_FLOAT		= QC_BYTECODE_TYPE_FLOAT32,
+	QC_BYTECODE_TYPE_VEC3		= 0x3,
+	QC_BYTECODE_TYPE_VECTOR		= QC_BYTECODE_TYPE_VEC3,
+	QC_BYTECODE_TYPE_ENTITY		= 0x4,
+	QC_BYTECODE_TYPE_FIELD		= 0x5,
+	QC_BYTECODE_TYPE_FUNC		= 0x6,
+
+	// Extended types
+	QC_BYTECODE_TYPE_INT32		= 0x7,
+	QC_BYTECODE_TYPE_UINT32		= 0x8,
+	QC_BYTECODE_TYPE_INT64		= 0x9,
+	QC_BYTECODE_TYPE_UINT64		= 0xA,
+	QC_BYTECODE_TYPE_FLOAT64	= 0xB,
+	QC_BYTECODE_TYPE_DOUBLE		= QC_BYTECODE_TYPE_FLOAT64,
+
+	// FTEQCC-only types
+	QC_BYTECODE_TYPE_VARIANT	= 0xC,
+	QC_BYTECODE_TYPE_STRUCT		= 0xD,
+	QC_BYTECODE_TYPE_UNION		= 0xE,
+	QC_BYTECODE_TYPE_ACCESSOR	= 0xF,
+	QC_BYTECODE_TYPE_ENUM		= 0x10,
+	QC_BYTECODE_TYPE_BOOL		= 0x11,
+
+	QC_BYTECODE_TYPE_COUNT,
+};
+
+/**
+ * @brief Extended bytecode data types
+ * @note These types are masked out by `(type & 0xffff)` when `(type & 0xffff0000)`
+ */
+enum QC_ByteCodeTypeExt{
+	// fundamental types
+	QC_BYTECODE_TYPE_EXT_INT8 = 0x0,
+	QC_BYTECODE_TYPE_EXT_UINT8 = 0x1,
+	QC_BYTECODE_TYPE_EXT_INT16 = 0x2,
+	QC_BYTECODE_TYPE_EXT_UINT16 = 0x3,
+
+	// composite types
+	QC_BYTECODE_TYPE_EXT_VEC2 = 0x4,
+	QC_BYTECODE_TYPE_EXT_VEC4 = 0x5,
+
+	QC_BYTECODE_TYPE_EXT_COUNT
+};
+
+static inline bool qcByteCodeTypeIsExt(QC_Uint32 type){ return (type & 0xffff0000); }
+
+static inline QC_ByteCodeType qcByteCodeType(QC_Uint32 type){ return (QC_ByteCodeType)(type); }
+static inline QC_ByteCodeTypeExt qcByteCodeTypeExt(QC_Uint32 type){ return (QC_ByteCodeTypeExt)(type & 0xffff); }
+
+/**
+ * @brief Get the size (in number of array elements) of a bytecode type
+ * @param type Type code
+ * @returns Size of type referred to by \p type
+ */
+QCVM_API QC_Uint32 qcByteCodeTypeSize(QC_Uint32 type);
+
+/**
  * @brief Opaque handle to loaded bytecode
  */
-typedef struct QC_ByteCode QC_ByteCode;
+QCVM_PREDEF(QC_ByteCode);
 
 /**
  * @brief Opaque handle to a bytecode builder
  */
-typedef struct QC_ByteCodeBuilder QC_ByteCodeBuilder;
+QCVM_PREDEF(QC_ByteCodeBuilder);
 
 /**
  * @brief Bytecode header
  */
-typedef struct QC_Header QC_Header;
+QCVM_PREDEF(QC_ByteCodeHeader);
 
-typedef struct QC_Statement16 QC_Statement16;
-typedef struct QC_Statement32 QC_Statement32;
+QCVM_PREDEF(QC_ByteCodeStatement16);
+QCVM_PREDEF(QC_ByteCodeStatement32);
 
 /**
  * @brief Bytecode statement
  */
-typedef QC_Statement32 QC_Statement;
+typedef QC_ByteCodeStatement32 QC_ByteCodeStatement;
 
-typedef struct QC_Def16 QC_Def16;
-typedef struct QC_Def32 QC_Def32;
+QCVM_PREDEF(QC_ByteCodeDef16);
+QCVM_PREDEF(QC_ByteCodeDef32);
 
 /**
  * @brief Bytecode definition
  */
-typedef QC_Def32 QC_Def;
+typedef QC_ByteCodeDef32 QC_ByteCodeDef;
 
-typedef struct QC_Field16 QC_Field16;
-typedef struct QC_Field32 QC_Field32;
+QCVM_PREDEF(QC_ByteCodeField16);
+QCVM_PREDEF(QC_ByteCodeField32);
 
 /**
  * @brief Bytecode field
  */
-typedef QC_Field32 QC_Field;
+typedef QC_ByteCodeField32 QC_ByteCodeField;
 
 /**
  * @brief Bytecode function
  */
-typedef struct QC_Function QC_Function;
+QCVM_PREDEF(QC_ByteCodeFunction);
 
 /**
  * @brief Try to create bytecode from in-memory representation
@@ -81,22 +145,22 @@ static inline QC_ByteCode *qcCreateByteCode(const char *bytes, size_t len){
  */
 QCVM_API bool qcDestroyByteCode(QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeStringsSize(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeStringsSize(const QC_ByteCode *bc);
 QCVM_API const char *qcByteCodeStrings(const QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeNumStatements(const QC_ByteCode *bc);
-QCVM_API const QC_Statement *qcByteCodeStatements(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeNumStatements(const QC_ByteCode *bc);
+QCVM_API const QC_ByteCodeStatement *qcByteCodeStatements(const QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeNumDefs(const QC_ByteCode *bc);
-QCVM_API const QC_Def *qcByteCodeDefs(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeNumDefs(const QC_ByteCode *bc);
+QCVM_API const QC_ByteCodeDef *qcByteCodeDefs(const QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeNumFields(const QC_ByteCode *bc);
-QCVM_API const QC_Field *qcByteCodeFields(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeNumFields(const QC_ByteCode *bc);
+QCVM_API const QC_ByteCodeField *qcByteCodeFields(const QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeNumFunctions(const QC_ByteCode *bc);
-QCVM_API const QC_Function *qcByteCodeFunctions(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeNumFunctions(const QC_ByteCode *bc);
+QCVM_API const QC_ByteCodeFunction *qcByteCodeFunctions(const QC_ByteCode *bc);
 
-QCVM_API QC_Uint32 qcByteCodeNumGlobals(const QC_ByteCode *bc);
+QCVM_API QC_Uintptr qcByteCodeNumGlobals(const QC_ByteCode *bc);
 QCVM_API const QC_Value *qcByteCodeGlobals(const QC_ByteCode *bc);
 
 /**
@@ -129,7 +193,7 @@ QCVM_API QC_ByteCode *qcBuilderEmit(QC_ByteCodeBuilder *builder);
  * @param stmt Statement to add to \p builder
  * @returns The index of the newly created statement or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_Statement *stmt);
+QCVM_API QC_Uintptr qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_ByteCodeStatement *stmt);
 
 /**
  * @brief Add a single definition to the builder
@@ -137,7 +201,7 @@ QCVM_API QC_Uint32 qcBuilderAddStatement(QC_ByteCodeBuilder *builder, const QC_S
  * @param def Definition to add to \p builder
  * @returns The index of the newly created definition or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *def);
+QCVM_API QC_Uintptr qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_ByteCodeDef *def);
 
 /**
  * @brief Add a single field to the builder
@@ -145,7 +209,7 @@ QCVM_API QC_Uint32 qcBuilderAddDef(QC_ByteCodeBuilder *builder, const QC_Def *de
  * @param field Field to add to \p builder
  * @returns The index of the newly created field or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field *field);
+QCVM_API QC_Uintptr qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_ByteCodeField *field);
 
 /**
  * @brief Add a function definition to a bytecode builder
@@ -153,7 +217,7 @@ QCVM_API QC_Uint32 qcBuilderAddField(QC_ByteCodeBuilder *builder, const QC_Field
  * @param fn Function to add to \p builder
  * @returns The index of the newly created function or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Function *fn);
+QCVM_API QC_Uintptr qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_ByteCodeFunction *fn);
 
 /**
  * @brief Add a global definition index to a bytecode builder
@@ -161,7 +225,7 @@ QCVM_API QC_Uint32 qcBuilderAddFunction(QC_ByteCodeBuilder *builder, const QC_Fu
  * @param value Global value to add to \p builder
  * @returns The index of the newly created global or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
+QCVM_API QC_Uintptr qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value value);
 
 /**
  * @brief Add a string to a bytecode builder
@@ -170,7 +234,7 @@ QCVM_API QC_Uint32 qcBuilderAddGlobal(QC_ByteCodeBuilder *builder, QC_Value valu
  * @param len Length of the string
  * @returns The offset in the string buffer of the added string or `UINT32_MAX` on error
  */
-QCVM_API QC_Uint32 qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len);
+QCVM_API QC_Uintptr qcBuilderAddString(QC_ByteCodeBuilder *builder, const char *str, size_t len);
 
 /**
  * @brief Bytecode sections
@@ -186,55 +250,55 @@ enum QC_Section{
 	QC_SECTION_COUNT
 };
 
-typedef struct QC_Header{
+struct QC_ByteCodeHeader{
 	QC_Uint32 ver; // must be 0x6
 	QC_Uint16 crc;
 	QC_Uint16 skip; // should be 0x0
 	QC_Uint32 sectionData[QC_SECTION_COUNT * 2];
 	QC_Uint32 entityFields;
-} QC_Header;
+};
 
-struct QC_Statement16{
+struct QC_ByteCodeStatement16{
 	QC_Uint16 op;
 	QC_Uint16 a, b, c;
 };
 
-struct QC_Statement32{
+struct QC_ByteCodeStatement32{
 	QC_Uint32 op;
 	QC_Uint32 a, b, c;
 };
 
-static_assert(sizeof(QC_Statement32) == 16, "misaligned QC_Statement32");
+static_assert(sizeof(QC_ByteCodeStatement32) == 16, "misaligned QC_ByteCodeStatement32");
 
-struct QC_Def16{
+struct QC_ByteCodeDef16{
 	QC_Uint16 type;
 	QC_Uint16 globalIdx;
 	QC_Uint32 nameIdx;
 };
 
-static_assert(sizeof(QC_Def16) == 8, "misaligned QC_Def16");
+static_assert(sizeof(QC_ByteCodeDef16) == 8, "misaligned QC_ByteCodeDef16");
 
-struct QC_Def32{
+struct QC_ByteCodeDef32{
 	QC_Uint32 type;
 	QC_Uint32 globalIdx;
 	QC_Uint32 nameIdx;
 };
 
-struct QC_Field16{
+struct QC_ByteCodeField16{
 	QC_Uint16 type;
 	QC_Uint16 offset;
 	QC_Uint32 nameIdx;
 };
 
-static_assert(sizeof(QC_Field16) == 8, "misaligned QC_Field16");
+static_assert(sizeof(QC_ByteCodeField16) == 8, "misaligned QC_ByteCodeField16");
 
-struct QC_Field32{
+struct QC_ByteCodeField32{
 	QC_Uint32 type;
 	QC_Uint32 offset;
 	QC_Uint32 nameIdx;
 };
 
-struct QC_Function{
+struct QC_ByteCodeFunction{
 	QC_Int32 entryPoint;
 	QC_Int32 localIdx;
 	QC_Uint32 numLocals;
@@ -245,7 +309,7 @@ struct QC_Function{
 	int8_t argSizes[8];
 };
 
-static_assert(sizeof(QC_Function) == 36, "misaligned QC_Function");
+static_assert(sizeof(QC_ByteCodeFunction) == 36, "misaligned QC_ByteCodeFunction");
 
 /**
  * @brief Bytecode ops

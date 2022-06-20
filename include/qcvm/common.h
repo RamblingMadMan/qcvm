@@ -20,6 +20,12 @@
 #define QCVM_SUPER(ptr) (&(ptr)->QCVM_SUPER_MEMBER)
 #define QCVM_SUPER2(ptr) (&(ptr)->QCVM_SUPER_MEMBER.QCVM_SUPER_MEMBER)
 
+#ifdef __cplusplus
+#define QCVM_DEFAULT_VALUE(val) = (val)
+#else
+#define QCVM_DEFAULT_VALUE(...)
+#endif
+
 #if defined(_WIN32)
 	#ifdef __GNUC__
 		#ifdef QCVM_IMPLEMENTATION
@@ -54,6 +60,9 @@ typedef uint32_t QC_Uint32;
 typedef int64_t QC_Int64;
 typedef uint64_t QC_Uint64;
 
+typedef intptr_t QC_Intptr;
+typedef uintptr_t QC_Uintptr;
+
 enum {
 	QC_TRUE = 1, QC_FALSE = 0
 };
@@ -64,7 +73,7 @@ typedef QC_Uint32 QC_String;
 
 typedef QC_Uint32 QC_Enum;
 typedef QC_Uint32 QC_Bool;
-typedef QC_Uint64 QC_Entity; // TODO: check quakec compatibility with 64-bit types
+typedef QC_Uintptr QC_Entity; // TODO: check quakec compatibility with 64-bit types
 
 typedef float QC_Float;
 typedef double QC_Double;
@@ -87,7 +96,7 @@ static_assert(sizeof(QC_Vector) == 12, "misaligned QC_Vector");
 
 typedef struct QC_StrView{
 	const char *ptr;
-	uintptr_t len;
+	QC_Uintptr len;
 } QC_StrView;
 
 #define QC_STRVIEW(lit) (QC_StrView{ lit, sizeof(lit)-1 })
@@ -165,51 +174,13 @@ typedef union QC_Value{
 	QC_Int32 i32;
 	QC_Uint64 u64;
 	QC_Int64 i64;
+	QC_Uintptr uptr;
+	QC_Intptr iptr;
 	QC_Float f32;
 	QC_Double f64;
 	QC_Vector v32;
 	QC_Vec4 v4f32;
 } QC_Value;
-
-/**
- * @brief Bytecode data types
- */
-enum QC_Type{
-	// Vanilla types
-	QC_TYPE_VOID = 0x0,
-	QC_TYPE_STRING	= 0x1,
-	QC_TYPE_FLOAT32	= 0x2,
-	QC_TYPE_FLOAT	= QC_TYPE_FLOAT32,
-	QC_TYPE_VECTOR	= 0x3,
-	QC_TYPE_ENTITY	= 0x4,
-	QC_TYPE_FIELD	= 0x5,
-	QC_TYPE_FUNC	= 0x6,
-
-	// extended types
-	QC_TYPE_INT32	= 0x7,
-	QC_TYPE_UINT32	= 0x8,
-	QC_TYPE_INT64	= 0x9,
-	QC_TYPE_UINT64	= 0xA,
-	QC_TYPE_FLOAT64	= 0xB,
-	QC_TYPE_DOUBLE	= QC_TYPE_FLOAT64,
-
-	// qc-only types (qc?)
-	QC_TYPE_VARIANT		= 0xC,
-	QC_TYPE_STRUCT		= 0xD,
-	QC_TYPE_UNION		= 0xE,
-	QC_TYPE_ACCESSOR	= 0xF,	// some weird type to provide class-like functions over a basic type.
-	QC_TYPE_ENUM		= 0x10,
-	QC_TYPE_BOOL		= 0x11,
-
-	QC_TYPE_COUNT
-};
-
-/**
- * @brief Get the size (in number of array elements) of a type
- * @param type Type code
- * @returns Size of type referred to by \p type
- */
-QCVM_API QC_Uint32 qcTypeSize(QC_Uint32 type);
 
 typedef struct QC_Allocator{
 	void*(*alloc)(void *user, size_t size, size_t alignment);
@@ -218,6 +189,8 @@ typedef struct QC_Allocator{
 } QC_Allocator;
 
 QCVM_API extern const QC_Allocator *const QC_DEFAULT_ALLOC;
+
+QCVM_API QC_Uintptr qcPageSize();
 
 static inline void *qcAllocA(const QC_Allocator *allocator, size_t size, size_t alignment){
 	QCVM_ASSERT(allocator);
@@ -259,7 +232,7 @@ QCVM_API void qcSetLogHandler(QC_LogHandler handler, void *user);
 
 QCVM_API void qcLogV(QC_LogLevel level, const char *fmtStr, va_list args) QCVM_PRINTF_LIKE(2, 0);
 
-inline void QCVM_PRINTF_LIKE(2, 3) qcLog(QC_LogLevel level, const char *fmtStr, ...){
+static inline void QCVM_PRINTF_LIKE(2, 3) qcLog(QC_LogLevel level, const char *fmtStr, ...){
 	va_list va;
 	va_start(va, fmtStr);
 	qcLogV(level, fmtStr, va);
