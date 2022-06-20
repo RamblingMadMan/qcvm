@@ -1,6 +1,7 @@
 # build related files/dirs
 build
 cmake-build-*
+compile_commands.json
 *.o
 *.a
 *.so
@@ -12,5 +13,6 @@ cmake-build-*
 .idea
 .vs
 .kdev4
+.cache
 *.kate-swp
 *.kdev4
